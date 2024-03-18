@@ -71,6 +71,10 @@ export default {
     deserialize: function () { },
     parse: function () { },
     stringify: function (value) {
+        let s = ''
+        const serializedValue = this.serialize(value)
+        for (const b of serializedValue) s += String.fromCharCode(b)
+        return btoa(s)
     },
     registerType: function () { }
 }
