@@ -18,7 +18,6 @@ export default {
                 break
             case 'number':
                 if (parseInt(value) === value) {
-                    // int
                     if (value >= 0) {
                         // unsigned integer: https://datatracker.ietf.org/doc/html/rfc4506.html#section-4.2
                         buffer = new ArrayBuffer(4)
@@ -69,12 +68,16 @@ export default {
         return new Uint8Array(buffer)
     },
     deserialize: function () { },
-    parse: function () { },
+    parse: function (str) {
+        const s = []
+        for (const b in atob(str)) s.push(b.charCodeAt())
+        return s
+    },
     stringify: function (value) {
-        let s = ''
+        const s = []
         const serializedValue = this.serialize(value)
-        for (const b of serializedValue) s += String.fromCharCode(b)
-        return btoa(s)
+        for (const b of serializedValue) s.push(String.fromCharCode(b))
+        return btoa(s.join(''))
     },
     registerType: function () { }
 }
