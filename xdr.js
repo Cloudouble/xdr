@@ -101,33 +101,93 @@ export default {
         } catch (e) {
             throw new Error(`Invalid buffer: ${buffer}`)
         }
-        let view = new DataView(buffer)
+        let view = new DataView(buffer), value
         if (view.byteLength % 4) throw new Error(`Invalid XDR buffer length: ${view.byteLength}`)
         if (!typeDefinition) {
             switch (view.byteLength) {
                 case 0:
-                    typeDefinition = 'void'
-                    break
+                    return null
                 case 4:
-                    typeDefinition = 'int'
-                    break
-                // return view.getUint32(0, false)
-                default:
-                    if (view.byteLength === ((4 + (Math.ceil(view.getUint32(0, false) / 4) * 4)))) {
-                        typeDefinition = 'string'
-                        // const endFlag = flagLength + 4
-                        // while (offset < endFlag) flagBytes.push(view.getUint8(offset++))
-                        // return flagBytes.map(b => String.fromCharCode(b)).join('')
-                    } else {
-                        // the flag is a typeDefinition, use it to parse the rest of the buffer and return that as the value
-                        const flagLength = view.getUint32(0, false)
-                        let offset = 4, flagBytes = []
-                        while (offset < flagLength) flagBytes.push(view.getUint8(offset++))
-                        typeDefinition = flagBytes.map(b => String.fromCharCode(b)).join('')
-                        buffer = buffer.slice(Math.ceil(offset / 4) * 4)
-                        view = new DataView(buffer)
+                    value = view.getUint32(0, false)
+                    switch (value) {
+                        case 0:
+                            return false
+                        case 1:
+                            return true
+                        default:
+                            return value
                     }
+                default:
+                    let offset = 0
+                    const flagLength = view.getUint32(offset, false), flagBlockLength = Math.ceil(flagLength / 4) * 4, flagChars = []
+                    offset += 4
+                    const flagEnd = offset + flagLength, bodyOffset = offset + flagBlockLength
+                    typeDefinition = String.fromCharCode(...(new Uint8Array(buffer, 4, flagLength)))
+                    if (view.byteLength === bodyOffset) return typeDefinition
+                    buffer = buffer.slice(bodyOffset)
+                    view = new DataView(buffer)
             }
+        }
+
+        switch (typeDefinition) {
+            case 'void':
+                if (buffer.byteLength) throw new Error('Void type must be empty')
+                return null
+            case 'int':
+                if (buffer.byteLength !== 4) throw new Error('int type must have byte length of 4')
+                return view.getInt32(0, false)
+            case 'unsigned int':
+                if (buffer.byteLength !== 4) throw new Error('unsigned int type must have byte length of 4')
+                return view.getUint32(0, false)
+            case 'bool':
+                if (buffer.byteLength !== 4) throw new Error('bool type must have byte length of 4')
+                return view.getUint32(0, false) !== 0
+            case 'hyper':
+                if (buffer.byteLength !== 8) throw new Error('hyper type must have byte length of 8')
+                const highBits = view.getInt32(0, false)
+                const lowBits = view.getUint32(4, false)
+                return BigInt(highBits) << 32n | BigInt(lowBits)
+            case 'unsigned hyper':
+                if (buffer.byteLength !== 8) throw new Error('unsigned hyper type must have byte length of 8')
+                const highBitsUnsigned = view.getUint32(0, false)
+                const lowBitsUnsigned = view.getUint32(4, false)
+                return BigInt(highBitsUnsigned) << 32n | BigInt(lowBitsUnsigned)
+            case 'float':
+                if (buffer.byteLength !== 4) throw new Error('float type must have byte length of 4')
+                return view.getFloat32(0, false)
+            case 'double':
+                if (buffer.byteLength !== 8) throw new Error('double type must have byte length of 8')
+                return view.getFloat64(0, false)
+            case 'quadruple':
+                throw new Error('quadruple type is not supported');
+            case 'opaque':
+                const opaqueLength = view.getUint32(0, false), opaqueBufferLength = 4 + (Math.ceil(opaqueLength / 4) * 4)
+                if (buffer.byteLength !== opaqueBufferLength) throw new Error(`opaque type must have byte length of ${opaqueBufferLength}`)
+                return new Uint8Array(buffer, 4, opaqueLength)
+            case 'string':
+                const stringLength = view.getUint32(0, false), stringBufferLength = 4 + (Math.ceil(stringLength / 4) * 4), chars = []
+                if (buffer.byteLength !== stringBufferLength) throw new Error(`string type must have byte length of ${stringBufferLength}`)
+                return String.fromCharCode(...(new Uint8Array(buffer, 4, stringLength)))
+            case 'object':
+                value = {}
+                let offset = 0
+                while (offset < buffer.byteLength) {
+                    const fieldNameLength = view.getUint32(offset, false)
+                    offset += 4
+                    const fieldNameBuffer = new Uint8Array(buffer, offset, fieldNameLength)
+                    offset += Math.ceil(fieldNameLength / 4) * 4
+                    const fieldName = String.fromCharCode(...fieldNameBuffer), fieldTypeLength = view.getUint32(offset, false)
+                    offset += 4
+                    const fieldTypeBuffer = new Uint8Array(buffer, offset, fieldTypeLength)
+                    offset += Math.ceil(fieldTypeLength / 4) * 4
+                    const fieldType = String.fromCharCode(...fieldTypeBuffer), fieldSize = getFieldSize(fieldType),
+                        fieldBuffer = buffer.slice(offset, offset + fieldSize), fieldValue = this.deserialize(fieldBuffer, fieldType)
+                    value[fieldName] = fieldValue
+                    offset += fieldSize
+                }
+                return value
+            default:
+            // type definition is a URL to a type definition
         }
 
         return [typeDefinition, new Uint8Array(buffer)]
