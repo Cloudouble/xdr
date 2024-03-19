@@ -94,7 +94,45 @@ export default {
                 throw new Error(`Unsupported type: ${typeof value}`)
         }
         return new Uint8Array(buffer)
-    }, deserialize: function () { },
+    },
+    deserialize: function (buffer, typeDefinition) {
+        if (!(buffer instanceof ArrayBuffer)) buffer = (new Uint8Array(Array.from(buffer))).buffer
+        const view = new DataView(buffer)
+        if (typeDefinition) {
+
+        } else {
+            switch (view.byteLength) {
+                case 0:
+                    return null
+                case 1:
+                    return view.getUint8(0)
+                case 2:
+                    return view.getUint16(0, false)
+                case 3:
+                    return view.getUint16(0, false) << 8 | view.getUint8(2)
+                case 4:
+                    return view.getUint32(0, false)
+            }
+            const flagLength = view.getUint32(0, false), flagBytes = []
+            if (view.byteLength === 4 + flagLength) {
+                // a string - parse and return it
+                let offset = 4
+                while (offset < view.byteLength) flagBytes.push(view.getUint8(offset++))
+                return flagBytes.map(b => String.fromCharCode(b)).join('')
+            }
+            if (view.byteLength < (4 + flagLength)) {
+                // it's an unsigned integer of some kind - parse and return it
+                let value = 0;
+                for (let i = 0; i < view.byteLength; i++) value = (value << 8) | view.getUint8(i)
+                return value;
+            }
+            // the flag is a typeDefinition, use it to parse the rest of the buffer and return that as the value
+
+            let offset = 0
+            while (offset < flagLength) flagBytes.push(view.getUint8((offset++) + 4))
+            return [view.getUint32(0, false), flagBytes]
+        }
+    },
     parse: function (str) {
         const s = []
         for (const b in atob(str)) s.push(b.charCodeAt())
