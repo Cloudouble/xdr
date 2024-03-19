@@ -96,42 +96,42 @@ export default {
         return new Uint8Array(buffer)
     },
     deserialize: function (buffer, typeDefinition) {
-        if (!(buffer instanceof ArrayBuffer)) buffer = (new Uint8Array(Array.from(buffer))).buffer
-        const view = new DataView(buffer)
-        if (typeDefinition) {
-
-        } else {
+        try {
+            if (!(buffer instanceof ArrayBuffer)) buffer = (new Uint8Array(Array.from(buffer))).buffer
+        } catch (e) {
+            throw new Error(`Invalid buffer: ${buffer}`)
+        }
+        let view = new DataView(buffer)
+        if (view.byteLength % 4) throw new Error(`Invalid XDR buffer length: ${view.byteLength}`)
+        if (!typeDefinition) {
             switch (view.byteLength) {
                 case 0:
-                    return null
-                case 1:
-                    return view.getUint8(0)
-                case 2:
-                    return view.getUint16(0, false)
-                case 3:
-                    return view.getUint16(0, false) << 8 | view.getUint8(2)
+                    typeDefinition = 'void'
+                    break
                 case 4:
-                    return view.getUint32(0, false)
+                    typeDefinition = 'int'
+                    break
+                // return view.getUint32(0, false)
+                default:
+                    if (view.byteLength === ((4 + (Math.ceil(view.getUint32(0, false) / 4) * 4)))) {
+                        typeDefinition = 'string'
+                        // const endFlag = flagLength + 4
+                        // while (offset < endFlag) flagBytes.push(view.getUint8(offset++))
+                        // return flagBytes.map(b => String.fromCharCode(b)).join('')
+                    } else {
+                        // the flag is a typeDefinition, use it to parse the rest of the buffer and return that as the value
+                        const flagLength = view.getUint32(0, false)
+                        let offset = 4, flagBytes = []
+                        while (offset < flagLength) flagBytes.push(view.getUint8(offset++))
+                        typeDefinition = flagBytes.map(b => String.fromCharCode(b)).join('')
+                        buffer = buffer.slice(Math.ceil(offset / 4) * 4)
+                        view = new DataView(buffer)
+                    }
             }
-            const flagLength = view.getUint32(0, false), flagBytes = []
-            if (view.byteLength === 4 + flagLength) {
-                // a string - parse and return it
-                let offset = 4
-                while (offset < view.byteLength) flagBytes.push(view.getUint8(offset++))
-                return flagBytes.map(b => String.fromCharCode(b)).join('')
-            }
-            if (view.byteLength < (4 + flagLength)) {
-                // it's an unsigned integer of some kind - parse and return it
-                let value = 0;
-                for (let i = 0; i < view.byteLength; i++) value = (value << 8) | view.getUint8(i)
-                return value;
-            }
-            // the flag is a typeDefinition, use it to parse the rest of the buffer and return that as the value
-
-            let offset = 0
-            while (offset < flagLength) flagBytes.push(view.getUint8((offset++) + 4))
-            return [view.getUint32(0, false), flagBytes]
         }
+
+        return [typeDefinition, new Uint8Array(buffer)]
+
     },
     parse: function (str) {
         const s = []
