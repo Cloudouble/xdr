@@ -178,18 +178,26 @@ class doubleType extends Type {
 class opaqueType extends Type {
     #bytes
     #value
-    #maxLength
+    #length
+    #variable
 
-    constructor(input, maxLength) {
+    constructor(input, variable, length) {
         super()
         if (Array.isArray(input)) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
-            const paddedLength = Math.ceil(input.length / 4) * 4
-            if (maxLength && (paddedLength > maxLength)) throw new Error(`opaque type must have byte length less than or equal to ${maxLength}`)
-            this.#bytes = new Uint8Array(paddedLength)
-            this.#bytes.set(input)
+            if (length && (input.length > length)) throw new Error(`opaque type must have byte length less than or equal to ${length}`)
+            length ||= input.length
+            const paddedLength = Math.ceil((variable ? input.length : length) / 4) * 4
+            this.#bytes = new Uint8Array(variable ? (4 + paddedLength) : paddedLength)
+            if (variable) {
+                const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+                view.setUint32(0, input.length, false)
+                this.#bytes.set(new Uint8Array(buffer))
+            }
+            this.#bytes.set(input, variable ? 4 : 0)
             this.#value = Array.from(input)
-            this.#maxLength = maxLength
+            this.#length = length
+            this.#variable = variable
         } else {
             throw new Error(`opaque type must be created using an array`)
         }
@@ -200,11 +208,15 @@ class opaqueType extends Type {
     }
 
     get value() {
-        return this.#value;
+        return this.#value
     }
 
-    get maxLength() {
-        return this.#maxLength;
+    get length() {
+        return this.#length
+    }
+
+    get variable() {
+        return this.#variable
     }
 
     toJSON() {
