@@ -128,7 +128,7 @@ export default {
                     view = new DataView(buffer)
             }
         }
-
+        typeDefinition = typeDefinition.trim()
         switch (typeDefinition) {
             case 'void':
                 if (buffer.byteLength) throw new Error('Void type must be empty')
@@ -187,7 +187,10 @@ export default {
                 }
                 return value
             default:
-            // type definition is a URL to a type definition
+            // type definition in the form of a string XDR data description
+
+
+
         }
 
         return [typeDefinition, new Uint8Array(buffer)]
@@ -204,6 +207,109 @@ export default {
         for (const b of serializedValue) s.push(String.fromCharCode(b))
         return btoa(s.join(''))
     },
-    registerType: function () { }
+    registerType: function () { },
+    Struct: class {
+        constructor(X) {
+            Object.defineProperties(this, {
+                constants: { value: {} },
+                enums: { value: {} },
+                types: { value: {} },
+                struct: { value: [] },
+                X: { value: X }
+            })
+            this.types = SimpleXdr.compileTypeDefinition()
+        }
+        compileTypeDefinition() {
+            const X = this.X
+            if (!X) return
+            const lines = X.split('\n'), definitions = {}
+            let currentType = null, currentEnum = null, currentStruct = null, currentUnion = null,
+                currentlyCommentedLine = false
+            for (let line of lines) {
+                line = line.trim()
+                if (!line) continue
+                if (currentlyCommentedLine) {
+                    if (line.endsWith('*/')) currentlyCommentedLine = false
+                    continue
+                } else if (line.startsWith('/*')) {
+                    currentlyCommentedLine = true
+                    continue
+                }
+                if (line.startsWith('typedef')) {
+                    const [, declaration] = line.split('typedef').map(part => part.trim());
+                    const [typeSpecifier, identifier] = declaration.split(/\s+/);
+                    definitions[identifier] = typeSpecifier;
+                } else if (line.startsWith('enum')) {
+                    const [, identifier, enumBody] = line.split(/enum|\{|\}/).map(part => part.trim());
+                    currentEnum = identifier;
+                    definitions[currentEnum] = {};
+                } else if (line.startsWith('struct')) {
+                    const [, identifier, structBody] = line.split(/struct|\{|\}/).map(part => part.trim());
+                    currentStruct = identifier;
+                    definitions[currentStruct] = {};
+                } else if (line.startsWith('union')) {
+                    const [, identifier, unionBody] = line.split(/union|\{|\}/).map(part => part.trim());
+                    currentUnion = identifier;
+                    definitions[currentUnion] = {};
+                } else if (line.startsWith('}')) {
+                    currentType = null;
+                } else if (currentEnum && line.includes('=')) {
+                    const [enumIdentifier, enumValue] = line.split('=').map(part => part.trim());
+                    definitions[currentEnum][enumIdentifier] = parseInt(enumValue);
+                } else if (currentStruct) {
+                    const [typeSpecifier, identifier] = line.split(/\s+/);
+                    definitions[currentStruct][identifier] = typeSpecifier.endsWith(';') ? typeSpecifier.slice(0, -1) : typeSpecifier;
+                } else if (currentUnion) {
+                    // TODO: Handle union cases
+                }
+            }
+
+            return definitions;
+        }
+
+
+        toString() {
+            return this.#typeDefinition
+        }
+
+        valueOf() {
+
+        }
+
+    }
 }
 
+// sampleTypeDefinitionObject = {
+//     constants: {
+//         MAXUSERNAME: 32,
+//         MAXFILELEN: 65535,
+//         MAXNAMELEN: 255
+//     },
+//     enums: {
+//         filekind: ["TEXT", "DATA", "EXEC"]
+//     },
+//     types: {
+//         filetype: {
+//             enum: this.enums.filekind,
+//             switch: {
+//                 TEXT: [{ type: "void" }],
+//                 DATA: [{ type: "string", "max": this.constants.MAXNAMELEN, identifier: "creator" }],
+//                 EXEC: [{ type: "string", "max": this.constants.MAXNAMELEN, identifier: "interpretor" }]
+//             }
+//         }
+//     },
+//     struct: [
+//         { type: "string", "max": this.constants.MAXNAMELEN, identifier: "filename" },
+//         { type: this.types.filetype, identifier: "type" },
+//         { type: "string", "max": this.constants.MAXUSERNAME, identifier: "owner" },
+//         { type: "opaque", "max": this.constants.MAXFILELEN, identifier: "data" }
+//     ]
+// }
+
+// sampleObject = {
+//     filename: "sillyprog",
+//     type: "EXEC",
+//     interpretor: "lisp",
+//     owner: "john",
+//     data: [28, 71, 75, 59, 74, 29]
+// }
