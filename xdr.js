@@ -46,7 +46,6 @@ class intType extends Type {
         }
         return this.#value
     }
-
 }
 
 class enumType extends intType {
@@ -69,12 +68,47 @@ class boolType extends enumType {
     }
 }
 
+class hyperType extends Type {
+    #bytes
+    #unsigned
+    #value
+
+    constructor(input, unsigned) {
+        super()
+        if (input instanceof Uint8Array) {
+            if (input.length !== 8) throw new Error('hyper type must have byte length of 8')
+            this.bytes = input
+            this.#unsigned = !!unsigned
+        } else if (typeof input === 'bigint') {
+            this.#value = input
+            this.#unsigned = input >= 0n
+        }
+    }
+
+    get bytes() {
+        if (!this.#bytes) {
+            const buffer = new ArrayBuffer(8), view = new DataView(buffer)
+            view.setBigUint64(0, BigInt.asUintN(64, this.value), false)
+            this.#bytes = new Uint8Array(buffer)
+        }
+        return this.#bytes
+    }
+
+    get value() {
+        if (this.#value === undefined) {
+            const view = new DataView(this.#bytes.buffer)
+            this.#value = this.#unsigned ? view.getBigUint64(0, false) : view.getBigInt64(0, false)
+        }
+        return this.#value
+    }
+}
 
 export default {
 
     int: intType,
     enum: enumType,
     bool: boolType,
+    hyper: hyperType,
 
     serialize: function (value) {
         let buffer, view
