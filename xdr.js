@@ -1,4 +1,81 @@
+class Type {
+
+    toJSON() {
+        return this.value ? this.value : null
+    }
+
+    toString() {
+        return this.value ? `${this.value}` : 'undefined'
+    }
+
+    valueOf() {
+        return this.value
+    }
+
+}
+
+class intType extends Type {
+    #bytes
+    #unsigned
+    #value
+    constructor(input, unsigned) {
+        super()
+        if (input instanceof Uint8Array) {
+            if (input.length !== 4) throw new Error('int type must have byte length of 4')
+            this.bytes = input
+            this.#unsigned = !!unsigned
+        } else if (Number.isInteger(input)) {
+            this.#value = input
+            this.#unsigned = input >= 0
+        }
+    }
+
+    get bytes() {
+        if (!this.#bytes) {
+            const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+            this.#unsigned ? view.setUint32(0, this.value, false) : view.setInt32(0, this.value, false)
+            this.#bytes = new Uint8Array(buffer)
+        }
+        return this.#bytes
+    }
+
+    get value() {
+        if (this.#value === undefined) {
+            const view = new DataView(this.#bytes.buffer)
+            this.#value = this.#unsigned ? view.getUint32(0, false) : view.getInt32(0, false)
+        }
+        return this.#value
+    }
+
+}
+
+class enumType extends intType {
+    #mapping = {}
+    #name
+    constructor(input, mapping) {
+        if (!mapping || (typeof mapping !== 'object')
+            || !Object.keys(mapping).length || !Object.values(mapping).every(v => Number.isInteger(v) && (v >= 0))) throw new Error('enum must have a mapping object')
+        if (!(input in mapping)) throw new Error(`enum value ${input} not found in mapping`)
+        super(mapping[input], true)
+        this.#name = input
+    }
+    get name() { return this.#name }
+}
+
+class boolType extends enumType {
+    constructor(input) {
+        input = !!input
+        super(input, { true: 1, false: 0 })
+    }
+}
+
+
 export default {
+
+    int: intType,
+    enum: enumType,
+    bool: boolType,
+
     serialize: function (value) {
         let buffer, view
         switch (typeof value) {
@@ -208,75 +285,80 @@ export default {
         return btoa(s.join(''))
     },
     registerType: function () { },
-    Struct: class {
-        constructor(X) {
-            Object.defineProperties(this, {
-                constants: { value: {} },
-                enums: { value: {} },
-                types: { value: {} },
-                struct: { value: [] },
-                X: { value: X }
-            })
-            this.types = SimpleXdr.compileTypeDefinition()
-        }
-        compileTypeDefinition() {
-            const X = this.X
-            if (!X) return
-            const lines = X.split('\n'), definitions = {}
-            let currentType = null, currentEnum = null, currentStruct = null, currentUnion = null,
-                currentlyCommentedLine = false
-            for (let line of lines) {
-                line = line.trim()
-                if (!line) continue
-                if (currentlyCommentedLine) {
-                    if (line.endsWith('*/')) currentlyCommentedLine = false
-                    continue
-                } else if (line.startsWith('/*')) {
-                    currentlyCommentedLine = true
-                    continue
-                }
-                if (line.startsWith('typedef')) {
-                    const [, declaration] = line.split('typedef').map(part => part.trim());
-                    const [typeSpecifier, identifier] = declaration.split(/\s+/);
-                    definitions[identifier] = typeSpecifier;
-                } else if (line.startsWith('enum')) {
-                    const [, identifier, enumBody] = line.split(/enum|\{|\}/).map(part => part.trim());
-                    currentEnum = identifier;
-                    definitions[currentEnum] = {};
-                } else if (line.startsWith('struct')) {
-                    const [, identifier, structBody] = line.split(/struct|\{|\}/).map(part => part.trim());
-                    currentStruct = identifier;
-                    definitions[currentStruct] = {};
-                } else if (line.startsWith('union')) {
-                    const [, identifier, unionBody] = line.split(/union|\{|\}/).map(part => part.trim());
-                    currentUnion = identifier;
-                    definitions[currentUnion] = {};
-                } else if (line.startsWith('}')) {
-                    currentType = null;
-                } else if (currentEnum && line.includes('=')) {
-                    const [enumIdentifier, enumValue] = line.split('=').map(part => part.trim());
-                    definitions[currentEnum][enumIdentifier] = parseInt(enumValue);
-                } else if (currentStruct) {
-                    const [typeSpecifier, identifier] = line.split(/\s+/);
-                    definitions[currentStruct][identifier] = typeSpecifier.endsWith(';') ? typeSpecifier.slice(0, -1) : typeSpecifier;
-                } else if (currentUnion) {
-                    // TODO: Handle union cases
-                }
-            }
-
-            return definitions;
-        }
 
 
-        toString() {
-            return this.#typeDefinition
-        }
 
-        valueOf() {
 
-        }
 
-    }
+    // Type: class {
+    //     constructor(X) {
+    //         Object.defineProperties(this, {
+    //             constants: { value: {} },
+    //             enums: { value: {} },
+    //             types: { value: {} },
+    //             struct: { value: [] },
+    //             X: { value: X }
+    //         })
+    //         this.types = SimpleXdr.compileTypeDefinition()
+    //     }
+    //     compileTypeDefinition() {
+    //         const X = this.X
+    //         if (!X) return
+    //         const lines = X.split('\n'), definitions = {}
+    //         let currentType = null, currentEnum = null, currentStruct = null, currentUnion = null,
+    //             currentlyCommentedLine = false
+    //         for (let line of lines) {
+    //             line = line.trim()
+    //             if (!line) continue
+    //             if (currentlyCommentedLine) {
+    //                 if (line.endsWith('*/')) currentlyCommentedLine = false
+    //                 continue
+    //             } else if (line.startsWith('/*')) {
+    //                 currentlyCommentedLine = true
+    //                 continue
+    //             }
+    //             if (line.startsWith('typedef')) {
+    //                 const [, declaration] = line.split('typedef').map(part => part.trim());
+    //                 const [typeSpecifier, identifier] = declaration.split(/\s+/);
+    //                 definitions[identifier] = typeSpecifier;
+    //             } else if (line.startsWith('enum')) {
+    //                 const [, identifier, enumBody] = line.split(/enum|\{|\}/).map(part => part.trim());
+    //                 currentEnum = identifier;
+    //                 definitions[currentEnum] = {};
+    //             } else if (line.startsWith('struct')) {
+    //                 const [, identifier, structBody] = line.split(/struct|\{|\}/).map(part => part.trim());
+    //                 currentStruct = identifier;
+    //                 definitions[currentStruct] = {};
+    //             } else if (line.startsWith('union')) {
+    //                 const [, identifier, unionBody] = line.split(/union|\{|\}/).map(part => part.trim());
+    //                 currentUnion = identifier;
+    //                 definitions[currentUnion] = {};
+    //             } else if (line.startsWith('}')) {
+    //                 currentType = null;
+    //             } else if (currentEnum && line.includes('=')) {
+    //                 const [enumIdentifier, enumValue] = line.split('=').map(part => part.trim());
+    //                 definitions[currentEnum][enumIdentifier] = parseInt(enumValue);
+    //             } else if (currentStruct) {
+    //                 const [typeSpecifier, identifier] = line.split(/\s+/);
+    //                 definitions[currentStruct][identifier] = typeSpecifier.endsWith(';') ? typeSpecifier.slice(0, -1) : typeSpecifier;
+    //             } else if (currentUnion) {
+    //                 // TODO: Handle union cases
+    //             }
+    //         }
+
+    //         return definitions;
+    //     }
+
+
+    //     toString() {
+    //         return this.#typeDefinition
+    //     }
+
+    //     valueOf() {
+
+    //     }
+
+    // }
 }
 
 // sampleTypeDefinitionObject = {
