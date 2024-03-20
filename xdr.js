@@ -77,6 +77,7 @@ class hyperType extends Type {
 
     constructor(input, unsigned) {
         super()
+        if (Array.isArray(input)) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
             if (input.length !== 8) throw new Error('hyper type must have byte length of 8')
             this.#bytes = input
@@ -116,6 +117,7 @@ class floatType extends Type {
 
     constructor(input) {
         super()
+        if (Array.isArray(input)) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
             if (input.length !== 4) throw new Error('float type must have byte length of 4')
             this.#bytes = input
@@ -149,6 +151,7 @@ class doubleType extends Type {
 
     constructor(input) {
         super()
+        if (Array.isArray(input)) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
             if (input.length !== 8) throw new Error('double type must have byte length of 8')
             this.#bytes = input
@@ -233,8 +236,9 @@ class stringType extends Type {
     constructor(input, maxLength) {
         super()
         this.#maxLength = maxLength
+        if (Array.isArray(input)) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
-            if (input.length !== 8) throw new Error('hyper type must have byte length of 8')
+            if (maxLength && (input.length > maxLength)) throw new Error(`string type must have maximum byte length of ${maxLength}`)
             this.#bytes = input
         } else if (typeof input === 'string') {
             this.#value = input
@@ -245,11 +249,9 @@ class stringType extends Type {
         if (!this.#bytes) {
             const paddedLength = Math.ceil(this.#value.length / 4) * 4
             this.#bytes = new Uint8Array(4 + paddedLength)
-            if (variable) {
-                const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-                view.setUint32(0, this.#value.length, false)
-                this.#bytes.set(new Uint8Array(buffer))
-            }
+            const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+            view.setUint32(0, this.#value.length, false)
+            this.#bytes.set(new Uint8Array(buffer))
             this.#bytes.set((new TextEncoder()).encode(this.#value), 4)
         }
         return this.#bytes
