@@ -20,6 +20,7 @@ class intType extends Type {
     #value
     constructor(input, unsigned) {
         super()
+        if (Array.isArray(input)) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
             if (input.length !== 4) throw new Error('int type must have byte length of 4')
             this.#bytes = input
@@ -224,6 +225,52 @@ class opaqueType extends Type {
     }
 }
 
+class stringType extends Type {
+    #bytes
+    #value
+    #maxLength
+
+    constructor(input, maxLength) {
+        super()
+        this.#maxLength = maxLength
+        if (input instanceof Uint8Array) {
+            if (input.length !== 8) throw new Error('hyper type must have byte length of 8')
+            this.#bytes = input
+        } else if (typeof input === 'string') {
+            this.#value = input
+        }
+    }
+
+    get bytes() {
+        if (!this.#bytes) {
+            const paddedLength = Math.ceil(this.#value.length / 4) * 4
+            this.#bytes = new Uint8Array(4 + paddedLength)
+            if (variable) {
+                const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+                view.setUint32(0, this.#value.length, false)
+                this.#bytes.set(new Uint8Array(buffer))
+            }
+            this.#bytes.set((new TextEncoder()).encode(this.#value), 4)
+        }
+        return this.#bytes
+    }
+
+    get value() {
+        if (this.#value === undefined) {
+            const view = new DataView(this.#bytes.buffer), stringLength = view.getUint32(0, false)
+            this.#value = String.fromCharCode(...(new Uint8Array(this.#bytes.buffer, 4, stringLength)))
+        }
+        return this.#value
+    }
+
+    get maxLength() {
+        return this.#maxLength
+    }
+
+}
+
+
+
 export default {
 
     int: intType,
@@ -233,6 +280,7 @@ export default {
     float: floatType,
     double: doubleType,
     opaque: opaqueType,
+    string: stringType,
 
     serialize: function (value) {
         let buffer, view
