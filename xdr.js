@@ -271,6 +271,37 @@ class stringType extends Type {
 
 }
 
+class voidType extends Type {
+    #bytes
+    #value
+    constructor() {
+        super()
+        this.#bytes = new Uint8Array(0)
+        this.#value = null
+    }
+
+    get bytes() {
+        return this.#bytes
+    }
+
+    get value() {
+        return this.#value
+    }
+
+    toJSON() {
+        return null
+    }
+
+    toString() {
+        return 'null'
+    }
+
+    valueOf() {
+        return null
+    }
+
+}
+
 
 
 export default {
@@ -283,6 +314,7 @@ export default {
     double: doubleType,
     opaque: opaqueType,
     string: stringType,
+    void: voidType,
 
     serialize: function (value) {
         let buffer, view
