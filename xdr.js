@@ -22,7 +22,7 @@ class intType extends Type {
         super()
         if (input instanceof Uint8Array) {
             if (input.length !== 4) throw new Error('int type must have byte length of 4')
-            this.bytes = input
+            this.#bytes = input
             this.#unsigned = !!unsigned
         } else if (Number.isInteger(input)) {
             this.#value = input
@@ -33,7 +33,7 @@ class intType extends Type {
     get bytes() {
         if (!this.#bytes) {
             const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-            this.#unsigned ? view.setUint32(0, this.value, false) : view.setInt32(0, this.value, false)
+            this.#unsigned ? view.setUint32(0, this.#value, false) : view.setInt32(0, this.#value, false)
             this.#bytes = new Uint8Array(buffer)
         }
         return this.#bytes
@@ -57,6 +57,7 @@ class enumType extends intType {
         if (!(input in mapping)) throw new Error(`enum value ${input} not found in mapping`)
         super(mapping[input], true)
         this.#name = input
+        this.#mapping = { ...mapping }
     }
     get name() { return this.#name }
 }
@@ -77,7 +78,7 @@ class hyperType extends Type {
         super()
         if (input instanceof Uint8Array) {
             if (input.length !== 8) throw new Error('hyper type must have byte length of 8')
-            this.bytes = input
+            this.#bytes = input
             this.#unsigned = !!unsigned
         } else if (typeof input === 'bigint') {
             this.#value = input
@@ -88,7 +89,7 @@ class hyperType extends Type {
     get bytes() {
         if (!this.#bytes) {
             const buffer = new ArrayBuffer(8), view = new DataView(buffer)
-            view.setBigUint64(0, BigInt.asUintN(64, this.value), false)
+            view.setBigUint64(0, BigInt.asUintN(64, this.#value), false)
             this.#bytes = new Uint8Array(buffer)
         }
         return this.#bytes
@@ -103,7 +104,7 @@ class hyperType extends Type {
     }
 
     toJSON() {
-        return this.value ? `${this.value}` : null
+        return this.value ? `${this.#value}` : null
     }
 
 }
@@ -116,7 +117,7 @@ class floatType extends Type {
         super()
         if (input instanceof Uint8Array) {
             if (input.length !== 4) throw new Error('float type must have byte length of 4')
-            this.bytes = input
+            this.#bytes = input
         } else if (typeof input === 'number') {
             this.#value = input
         }
@@ -125,7 +126,7 @@ class floatType extends Type {
     get bytes() {
         if (!this.#bytes) {
             const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-            view.setFloat32(0, this.value, false)
+            view.setFloat32(0, this.#value, false)
             this.#bytes = new Uint8Array(buffer)
         }
         return this.#bytes
@@ -149,7 +150,7 @@ class doubleType extends Type {
         super()
         if (input instanceof Uint8Array) {
             if (input.length !== 8) throw new Error('double type must have byte length of 8')
-            this.bytes = input
+            this.#bytes = input
         } else if (typeof input === 'number') {
             this.#value = input
         }
@@ -158,7 +159,7 @@ class doubleType extends Type {
     get bytes() {
         if (!this.#bytes) {
             const buffer = new ArrayBuffer(8), view = new DataView(buffer)
-            view.setFloat64(0, this.value, false)
+            view.setFloat64(0, this.#value, false)
             this.#bytes = new Uint8Array(buffer)
         }
         return this.#bytes
@@ -174,7 +175,42 @@ class doubleType extends Type {
 
 }
 
+class opaqueType extends Type {
+    #bytes
+    #value
+    #maxLength
 
+    constructor(input, maxLength) {
+        super()
+        if (Array.isArray(input)) input = new Uint8Array(input)
+        if (input instanceof Uint8Array) {
+            const paddedLength = Math.ceil(input.length / 4) * 4
+            if (maxLength && (paddedLength > maxLength)) throw new Error(`opaque type must have byte length less than or equal to ${maxLength}`)
+            this.#bytes = new Uint8Array(paddedLength)
+            this.#bytes.set(input)
+            this.#value = Array.from(input)
+            this.#maxLength = maxLength
+        } else {
+            throw new Error(`opaque type must be created using an array`)
+        }
+    }
+
+    get bytes() {
+        return this.#bytes
+    }
+
+    get value() {
+        return this.#value;
+    }
+
+    get maxLength() {
+        return this.#maxLength;
+    }
+
+    toJSON() {
+        return this.value ?? null
+    }
+}
 
 export default {
 
@@ -184,6 +220,7 @@ export default {
     hyper: hyperType,
     float: floatType,
     double: doubleType,
+    opaque: opaqueType,
 
     serialize: function (value) {
         let buffer, view
