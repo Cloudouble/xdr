@@ -101,7 +101,80 @@ class hyperType extends Type {
         }
         return this.#value
     }
+
+    toJSON() {
+        return this.value ? `${this.value}` : null
+    }
+
 }
+
+class floatType extends Type {
+    #bytes
+    #value
+
+    constructor(input) {
+        super()
+        if (input instanceof Uint8Array) {
+            if (input.length !== 4) throw new Error('float type must have byte length of 4')
+            this.bytes = input
+        } else if (typeof input === 'number') {
+            this.#value = input
+        }
+    }
+
+    get bytes() {
+        if (!this.#bytes) {
+            const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+            view.setFloat32(0, this.value, false)
+            this.#bytes = new Uint8Array(buffer)
+        }
+        return this.#bytes
+    }
+
+    get value() {
+        if (this.#value === undefined) {
+            const view = new DataView(this.#bytes.buffer)
+            this.#value = view.getFloat32(0, false)
+        }
+        return this.#value
+    }
+
+}
+
+class doubleType extends Type {
+    #bytes
+    #value
+
+    constructor(input) {
+        super()
+        if (input instanceof Uint8Array) {
+            if (input.length !== 8) throw new Error('double type must have byte length of 8')
+            this.bytes = input
+        } else if (typeof input === 'number') {
+            this.#value = input
+        }
+    }
+
+    get bytes() {
+        if (!this.#bytes) {
+            const buffer = new ArrayBuffer(8), view = new DataView(buffer)
+            view.setFloat64(0, this.value, false)
+            this.#bytes = new Uint8Array(buffer)
+        }
+        return this.#bytes
+    }
+
+    get value() {
+        if (this.#value === undefined) {
+            const view = new DataView(this.#bytes.buffer)
+            this.#value = view.getFloat64(0, false)
+        }
+        return this.#value
+    }
+
+}
+
+
 
 export default {
 
@@ -109,6 +182,8 @@ export default {
     enum: enumType,
     bool: boolType,
     hyper: hyperType,
+    float: floatType,
+    double: doubleType,
 
     serialize: function (value) {
         let buffer, view
