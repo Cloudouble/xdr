@@ -341,7 +341,11 @@ export function X(xCode) {
 
     return class extends TypeDef {
 
+        static serialize(value) {
+        }
 
+        static deserialize(bytes) {
+        }
 
     }
 
