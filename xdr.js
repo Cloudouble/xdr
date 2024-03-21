@@ -389,9 +389,9 @@ export function X(xCode) {
     }
 
 
-    console.log('line 390', xCode)
+    console.log('line 392', xCode)
 
-    console.log('line 392', JSON.stringify({
+    console.log('line 394', JSON.stringify({
         constants, enums, unions,
         structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])),
         entry
