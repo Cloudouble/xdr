@@ -89,7 +89,7 @@ class intType extends TypeDef {
 
     constructor(input, unsigned) {
         super(input)
-        this.unsigned = isValueInput ? input >= 0 : !!unsigned
+        this.unsigned = this.constructor.isValueInput ? input >= 0 : !!unsigned
     }
 
 }
