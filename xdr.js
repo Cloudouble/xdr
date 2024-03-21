@@ -81,17 +81,18 @@ class intType extends TypeDef {
 }
 
 class enumType extends intType {
-    #mapping = {}
+    #map
     #name
-    constructor(input, mapping) {
-        if (!mapping || (typeof mapping !== 'object')
-            || !Object.keys(mapping).length || !Object.values(mapping).every(v => Number.isInteger(v) && (v >= 0))) throw new Error('enum must have a mapping object')
-        if (!(input in mapping)) throw new Error(`enum value ${input} not found in mapping`)
-        super(mapping[input], true)
-        this.#name = input
-        this.#mapping = { ...mapping }
+    constructor(name, map) {
+        if (!map || (typeof map !== 'object')
+            || !Object.keys(map).length || !Object.values(map).every(v => Number.isInteger(v) && (v >= 0))) throw new Error('enum must have a mapping object')
+        if (!(name in map)) throw new Error(`enum name ${name} not found in map`)
+        super(map[name], true)
+        this.#name = name
+        this.#map = { ...map }
     }
     get name() { return this.#name }
+    get map() { return this.#map }
 }
 
 class boolType extends enumType {
@@ -102,148 +103,113 @@ class boolType extends enumType {
 }
 
 class hyperType extends TypeDef {
-    #bytes
-    #unsigned
-    #value
+
+    static isValidInput(input) {
+        return typeof input === 'bigint'
+    }
+
+    static serialize(value) {
+        const buffer = new ArrayBuffer(8), view = new DataView(buffer)
+        view.setBigUint64(0, BigInt.asUintN(64, value), false)
+        return new Uint8Array(buffer)
+    }
+
+    static deserialize(bytes) {
+        const view = new DataView(bytes.buffer)
+        return this.unsigned ? view.getBigUint64(0, false) : view.getBigInt64(0, false)
+    }
 
     constructor(input, unsigned) {
-        super()
-        if (Array.isArray(input)) input = new Uint8Array(input)
-        if (input instanceof Uint8Array) {
-            if (input.length !== 8) throw new Error('hyper type must have byte length of 8')
-            this.#bytes = input
-            this.#unsigned = !!unsigned
-        } else if (typeof input === 'bigint') {
-            this.#value = input
-            this.#unsigned = input >= 0n
-        }
-    }
-
-    get bytes() {
-        if (!this.#bytes) {
-            const buffer = new ArrayBuffer(8), view = new DataView(buffer)
-            view.setBigUint64(0, BigInt.asUintN(64, this.#value), false)
-            this.#bytes = new Uint8Array(buffer)
-        }
-        return this.#bytes
-    }
-
-    get value() {
-        if (this.#value === undefined) {
-            const view = new DataView(this.#bytes.buffer)
-            this.#value = this.#unsigned ? view.getBigUint64(0, false) : view.getBigInt64(0, false)
-        }
-        return this.#value
+        if (input?.length !== 8) throw new Error('hyper type must have byte length of 8')
+        super(input)
+        this.unsigned = this.constructor.isValidInput(input) ? input >= 0n : !!unsigned
     }
 
     toJSON() {
-        return this.value ? `${this.#value}` : null
+        return this.value ? `${this.value}` : null
     }
 
 }
 
 class floatType extends TypeDef {
-    #bytes
-    #value
 
-    constructor(input) {
-        super()
-        if (Array.isArray(input)) input = new Uint8Array(input)
-        if (input instanceof Uint8Array) {
-            if (input.length !== 4) throw new Error('float type must have byte length of 4')
-            this.#bytes = input
-        } else if (typeof input === 'number') {
-            this.#value = input
-        }
+    static isValidInput(input) {
+        return typeof input === 'number'
     }
 
-    get bytes() {
-        if (!this.#bytes) {
-            const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-            view.setFloat32(0, this.#value, false)
-            this.#bytes = new Uint8Array(buffer)
-        }
-        return this.#bytes
+    static serialize(value) {
+        const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+        view.setFloat32(0, value, false)
+        return new Uint8Array(buffer)
     }
 
-    get value() {
-        if (this.#value === undefined) {
-            const view = new DataView(this.#bytes.buffer)
-            this.#value = view.getFloat32(0, false)
-        }
-        return this.#value
+    static deserialize(bytes) {
+        const view = new DataView(bytes.buffer)
+        return view.getFloat32(0, false)
+    }
+
+    constructor(input, unsigned) {
+        if (input?.length !== 4) throw new Error('float type must have byte length of 4')
+        super(input)
     }
 
 }
 
 class doubleType extends TypeDef {
-    #bytes
-    #value
 
-    constructor(input) {
-        super()
-        if (Array.isArray(input)) input = new Uint8Array(input)
-        if (input instanceof Uint8Array) {
-            if (input.length !== 8) throw new Error('double type must have byte length of 8')
-            this.#bytes = input
-        } else if (typeof input === 'number') {
-            this.#value = input
-        }
+    static isValidInput(input) {
+        return typeof input === 'number'
     }
 
-    get bytes() {
-        if (!this.#bytes) {
-            const buffer = new ArrayBuffer(8), view = new DataView(buffer)
-            view.setFloat64(0, this.#value, false)
-            this.#bytes = new Uint8Array(buffer)
-        }
-        return this.#bytes
+    static serialize(value) {
+        const buffer = new ArrayBuffer(8), view = new DataView(buffer)
+        view.setFloat64(0, value, false)
+        return new Uint8Array(buffer)
     }
 
-    get value() {
-        if (this.#value === undefined) {
-            const view = new DataView(this.#bytes.buffer)
-            this.#value = view.getFloat64(0, false)
-        }
-        return this.#value
+    static deserialize(bytes) {
+        const view = new DataView(bytes.buffer)
+        return view.getFloat64(0, false)
+    }
+
+    constructor(input, unsigned) {
+        if (input?.length !== 8) throw new Error('double type must have byte length of 8')
+        super(input)
     }
 
 }
 
 class opaqueType extends TypeDef {
-    #bytes
-    #value
+
     #length
     #variable
 
-    constructor(input, variable, length) {
-        super()
-        if (Array.isArray(input)) input = new Uint8Array(input)
-        if (input instanceof Uint8Array) {
-            if (length && (input.length > length)) throw new Error(`opaque type must have byte length less than or equal to ${length}`)
-            length ||= input.length
-            const paddedLength = Math.ceil((variable ? input.length : length) / 4) * 4
-            this.#bytes = new Uint8Array(variable ? (4 + paddedLength) : paddedLength)
-            if (variable) {
-                const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-                view.setUint32(0, input.length, false)
-                this.#bytes.set(new Uint8Array(buffer))
-            }
-            this.#bytes.set(input, variable ? 4 : 0)
-            this.#value = Array.from(input)
-            this.#length = length
-            this.#variable = variable
-        } else {
-            throw new Error(`opaque type must be created using an array`)
+    static isValidInput(input) {
+        return Array.isArray(input)
+    }
+
+    static serialize(value) {
+        const paddedLength = Math.ceil((this.variable ? value.length : this.length) / 4) * 4
+        const bytes = new Uint8Array(this.variable ? (4 + paddedLength) : paddedLength)
+        if (this.variable) {
+            const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+            view.setUint32(0, value.length, false)
+            bytes.set(new Uint8Array(buffer))
         }
+        bytes.set(input, variable ? 4 : 0)
+        return bytes
     }
 
-    get bytes() {
-        return this.#bytes
+    static deserialize(bytes) {
+        return Array.from(bytes)
     }
 
-    get value() {
-        return this.#value
+    constructor(input, variable, length) {
+        super(input)
+        if (length && (input.length > length)) throw new Error(`opaque type must have byte length less than or equal to ${length}`)
+        length ||= input.length
+        this.#length = length
+        this.#variable = variable
     }
 
     get length() {
@@ -254,9 +220,6 @@ class opaqueType extends TypeDef {
         return this.#variable
     }
 
-    toJSON() {
-        return this.value ?? null
-    }
 }
 
 class stringType extends TypeDef {
