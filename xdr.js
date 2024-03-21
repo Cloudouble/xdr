@@ -311,8 +311,12 @@ const regexConst = /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g
     regexUnion = /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;/g
 
 const parseTypeLengthModeIdentifier = function (declaration, constants) {
-    let [type, identifier] = declaration.split(/\s+/).map(part => part.trim()), length, mode
-    if (type === 'void') return { type, length, mode, identifier }
+    let [type, identifier] = declaration.split(/\s+/).map(part => part.trim()), length, mode, optional
+    if (identifier && identifier[0] === '*') {
+        identifier = identifier.slice(1)
+        optional = true
+    }
+    if (type === 'void') return { type, length, mode, identifier, optional }
     const identifierIndexOfLt = identifier.indexOf('<'), identifierIndexOfGt = identifier.indexOf('>'),
         identifierIndexOfBracketStart = identifier.indexOf('['), identifierIndexOfBracketEnd = identifier.indexOf(']')
     if ((identifierIndexOfLt > 0) && (identifierIndexOfLt < identifierIndexOfGt)) {
@@ -326,7 +330,7 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
         mode = 'fixed'
         identifier = identifier.slice(0, identifierIndexOfBracketStart)
     }
-    return { type, length, mode, identifier }
+    return { type, length, mode, identifier, optional }
 }
 
 export function X(xCode) {
@@ -359,9 +363,9 @@ export function X(xCode) {
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
             if (!declaration) continue
             if (declaration[0] === ';') continue
-            const { type, length, mode, identifier } = parseTypeLengthModeIdentifier(declaration, constants)
+            const { type, length, mode, identifier, optional } = parseTypeLengthModeIdentifier(declaration, constants)
             if (!type || !identifier) throw new Error(`struct ${structName} has invalid declaration: ${declaration};`)
-            map.set(identifier, { type, length, mode })
+            map.set(identifier, { type, length, mode, optional })
         }
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()

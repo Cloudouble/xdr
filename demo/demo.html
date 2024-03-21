@@ -13,9 +13,9 @@
     <script type="module">
         import XDR, { X } from "../xdr.js"
 
-        const xCode = `const MAXUSERNAME = 032;     /* max length of a user name */
+        const xCode = `const MAXUSERNAME = 32;     /* max length of a user name */
          const MAXFILELEN = 65535;   /* max length of a file      */
-         const MAXNAMELEN = 0x255;     /* max length of a file name */
+         const MAXNAMELEN = 255;     /* max length of a file name */
 
          /*
           * Types of files:
@@ -45,7 +45,7 @@
             string filename<MAXNAMELEN>; /* name of file    */
             filetype type;               /* info about file */
             string owner<MAXUSERNAME>;   /* owner of file   */
-            opaque data<MAXFILELEN>;     /* file data       */
+            opaque *data<MAXFILELEN>;     /* file data       */
          };
 `
 
