@@ -191,16 +191,17 @@ class doubleType extends TypeDef {
 class opaqueType extends TypeDef {
 
     #length
-    #variable
+    #mode
 
     static isValueInput(input) {
         return Array.isArray(input)
     }
 
     static serialize(value) {
-        const paddedLength = Math.ceil((this.variable ? value.length : this.length) / 4) * 4
-        const bytes = new Uint8Array(this.variable ? (4 + paddedLength) : paddedLength)
-        if (this.variable) {
+        const mode = this.mode, isVariableMode = mode === 'variable'
+        const paddedLength = Math.ceil((isVariableMode ? value.length : this.length) / 4) * 4
+        const bytes = new Uint8Array(isVariableMode ? (4 + paddedLength) : paddedLength)
+        if (isVariableMode) {
             const buffer = new ArrayBuffer(4), view = new DataView(buffer)
             view.setUint32(0, value.length, false)
             bytes.set(new Uint8Array(buffer))
@@ -213,20 +214,20 @@ class opaqueType extends TypeDef {
         return Array.from(bytes)
     }
 
-    constructor(input, variable, length) {
+    constructor(input, mode, length) {
         super(input)
         if (length && (input.length > length)) throw new Error(`opaque type must have byte length less than or equal to ${length}`)
         length ||= input.length
         this.#length = length
-        this.#variable = variable
+        this.#mode = mode === 'variable' ? 'variable' : 'fixed'
     }
 
     get length() {
         return this.#length
     }
 
-    get variable() {
-        return this.#variable
+    get mode() {
+        return this.#mode
     }
 
 }
@@ -235,7 +236,7 @@ class stringType extends TypeDef {
 
     static validBytesLength = true
 
-    #maxLength
+    #length
 
     static isValueInput(input) {
         return typeof input === 'string'
@@ -256,13 +257,13 @@ class stringType extends TypeDef {
         return String.fromCharCode(...(new Uint8Array(bytes.buffer, 4, stringLength)))
     }
 
-    constructor(input, maxLength) {
+    constructor(input, length) {
         super(input)
-        if (maxLength && (this.value > maxLength)) throw new Error(`string type must have maximum byte length of ${maxLength}`)
+        if (length && this.value && (this.value.length > length)) throw new Error(`string type must have maximum byte length of ${length}`)
     }
 
-    get maxLength() {
-        return this.#maxLength
+    get length() {
+        return this.#length
     }
 
 }
@@ -306,8 +307,27 @@ export default XDR
 
 const regexConst = /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
     regexEnum = /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
-    regexStruct = /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g
+    regexStruct = /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
+    regexUnion = /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;/g
 
+const parseTypeLengthModeIdentifier = function (declaration, constants) {
+    let [type, identifier] = declaration.split(/\s+/).map(part => part.trim()), length, mode
+    if (type === 'void') return { type, length, mode, identifier }
+    const identifierIndexOfLt = identifier.indexOf('<'), identifierIndexOfGt = identifier.indexOf('>'),
+        identifierIndexOfBracketStart = identifier.indexOf('['), identifierIndexOfBracketEnd = identifier.indexOf(']')
+    if ((identifierIndexOfLt > 0) && (identifierIndexOfLt < identifierIndexOfGt)) {
+        length = identifier.slice(identifierIndexOfLt + 1, identifierIndexOfGt)
+        length = parseInt(length) || constants[length] || undefined
+        mode = 'variable'
+        identifier = identifier.slice(0, identifierIndexOfLt)
+    } else if ((identifierIndexOfBracketStart > 0) && (identifierIndexOfBracketStart < identifierIndexOfBracketEnd)) {
+        length = identifier.slice(identifierIndexOfBracketStart + 1, identifierIndexOfBracketEnd)
+        length = parseInt(length) || constants[length] || undefined
+        mode = 'fixed'
+        identifier = identifier.slice(0, identifierIndexOfBracketStart)
+    }
+    return { type, length, mode, identifier }
+}
 
 export function X(xCode) {
     if (!xCode || (typeof xCode !== 'string')) return
@@ -339,21 +359,7 @@ export function X(xCode) {
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
             if (!declaration) continue
             if (declaration[0] === ';') continue
-            let [type, identifier] = declaration.split(/\s+/).map(part => part.trim()), length, mode
-            if (type === 'void') continue
-            const identifierIndexOfLt = identifier.indexOf('<'), identifierIndexOfGt = identifier.indexOf('>'),
-                identifierIndexOfBracketStart = identifier.indexOf('['), identifierIndexOfBracketEnd = identifier.indexOf(']')
-            if ((identifierIndexOfLt > 0) && (identifierIndexOfLt < identifierIndexOfGt)) {
-                length = identifier.slice(identifierIndexOfLt + 1, identifierIndexOfGt)
-                length = parseInt(length) || constants[length] || undefined
-                mode = 'variable'
-                identifier = identifier.slice(0, identifierIndexOfLt)
-            } else if ((identifierIndexOfBracketStart > 0) && (identifierIndexOfBracketStart < identifierIndexOfBracketEnd)) {
-                length = identifier.slice(identifierIndexOfBracketStart + 1, identifierIndexOfBracketEnd)
-                length = parseInt(length) || constants[length] || undefined
-                mode = 'fixed'
-                identifier = identifier.slice(0, identifierIndexOfBracketStart)
-            }
+            const { type, length, mode, identifier } = parseTypeLengthModeIdentifier(declaration, constants)
             if (!type || !identifier) throw new Error(`struct ${structName} has invalid declaration: ${declaration};`)
             map.set(identifier, { type, length, mode })
         }
@@ -361,12 +367,28 @@ export function X(xCode) {
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
+    for (const m of xCode.matchAll(regexUnion)) {
+        const unionName = m[1], discriminantDeclaration = m[2], arms = {}
+        const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(/\s+/).map(part => part.trim())
+        const discriminant = { type: discriminantType, value: discriminantValue }
+        for (let caseSpec of m[3].split(';')) {
+            caseSpec = caseSpec.trim().replace('case ', '').trim()
+            if (!caseSpec) continue
+            const [discriminantValue, armDeclaration] = caseSpec.split(':').map(part => part.trim())
+            const { type, length, mode, identifier } = parseTypeLengthModeIdentifier(armDeclaration, constants)
+            arms[discriminantValue] = { type, length, mode, identifier }
+        }
+        unions[unionName] = { discriminant, arms }
+        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+    }
 
-    console.log('line 352', xCode)
 
-    console.log('line 354', JSON.stringify({
+    console.log('line 388', xCode)
+
+    console.log('line 390', JSON.stringify({
         constants, enums,
-        structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())]))
+        structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])),
+        unions
     }, null, 4))
 
     return class extends TypeDef {
