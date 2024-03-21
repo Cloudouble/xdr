@@ -308,7 +308,8 @@ export default XDR
 const regexConst = /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
     regexEnum = /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
     regexStruct = /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
-    regexUnion = /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;/g
+    regexUnion = /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;/g,
+    regexTypeDef = /typedef\s+(\w+)\s+([\w\[\]\*]+)\s*;/g
 
 const parseTypeLengthModeIdentifier = function (declaration, constants) {
     let [type, identifier] = declaration.split(/\s+/).map(part => part.trim()), length, mode, optional
@@ -336,7 +337,7 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
 export function X(xCode) {
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*[\r\n]/gm, '').trim()
-    const lines = [], constants = {}, enums = {}, structs = {}, unions = {}, types = {}, identifiers = {}
+    const lines = [], constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
 
     for (const m of xCode.matchAll(regexConst)) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
@@ -354,6 +355,11 @@ export function X(xCode) {
         }
         enums[enumName] = map
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+    }
+
+    for (const t of xCode.matchAll(regexTypeDef)) {
+        const typeObj = parseTypeLengthModeIdentifier(`${t[1]} ${t[2]}`)
+        typedefs[typeObj.identifier] = typeObj
     }
 
     for (const m of xCode.matchAll(regexUnion)) {
@@ -399,7 +405,7 @@ export function X(xCode) {
 
     console.log('line 400', xCode)
     console.log('line 401', JSON.stringify({
-        constants, enums, unions,
+        constants, enums, unions, typedefs,
         structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])),
         entry
     }, null, 4))
