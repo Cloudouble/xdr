@@ -1,5 +1,42 @@
 class TypeDef {
 
+    #bytes
+    #value
+
+    static serialize(value, instance) {
+
+    }
+
+    static deserialize(bytes, instance) {
+
+    }
+
+    static isValidInput(input) {
+        return input instanceof Object
+    }
+
+    constructor(input) {
+        super()
+        if (!(input instanceof Uint8Array) && Array.isArray(input)) input = new Uint8Array(input)
+        if (input instanceof Uint8Array) {
+            const paddedLength = Math.ceil(input.length / 4) * 4
+            this.#bytes = new Uint8Array(paddedLength)
+            this.#bytes.set(input)
+        } else if (this.constructor.isValidInput(input)) {
+            this.#value = input
+        }
+    }
+
+    get bytes() {
+        this.#bytes ??= this.constructor.serialize.bind(this)(this.#value)
+        return this.#bytes
+    }
+
+    get value() {
+        this.#value ??= this.constructor.deserialize.bind(this)(this.#bytes)
+        return this.#value
+    }
+
     toJSON() {
         return this.value ? this.value : null
     }
@@ -19,38 +56,28 @@ class TypeDef {
 }
 
 class intType extends TypeDef {
-    #bytes
-    #unsigned
-    #value
+
+    static isValidInput(input) {
+        return Number.isInteger(input)
+    }
+
+    static serialize(value) {
+        const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+        this.unsigned ? view.setUint32(0, value, false) : view.setInt32(0, value, false)
+        return new Uint8Array(buffer)
+    }
+
+    static deserialize(bytes) {
+        const view = new DataView(bytes.buffer)
+        return this.unsigned ? view.getUint32(0, false) : view.getInt32(0, false)
+    }
+
     constructor(input, unsigned) {
-        super()
-        if (Array.isArray(input)) input = new Uint8Array(input)
-        if (input instanceof Uint8Array) {
-            if (input.length !== 4) throw new Error('int type must have byte length of 4')
-            this.#bytes = input
-            this.#unsigned = !!unsigned
-        } else if (Number.isInteger(input)) {
-            this.#value = input
-            this.#unsigned = input >= 0
-        }
+        if (input?.length !== 4) throw new Error('int type must have byte length of 4')
+        super(input)
+        this.unsigned = this.constructor.isValidInput(input) ? input >= 0 : !!unsigned
     }
 
-    get bytes() {
-        if (!this.#bytes) {
-            const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-            this.#unsigned ? view.setUint32(0, this.#value, false) : view.setInt32(0, this.#value, false)
-            this.#bytes = new Uint8Array(buffer)
-        }
-        return this.#bytes
-    }
-
-    get value() {
-        if (this.#value === undefined) {
-            const view = new DataView(this.#bytes.buffer)
-            this.#value = this.#unsigned ? view.getUint32(0, false) : view.getInt32(0, false)
-        }
-        return this.#value
-    }
 }
 
 class enumType extends intType {
@@ -358,30 +385,7 @@ export function X(xCode) {
 
     return class extends TypeDef {
 
-        #bytes
-        #value
 
-        constructor(input) {
-            super()
-            if (Array.isArray(input)) input = new Uint8Array(input)
-            if (input instanceof Uint8Array) {
-                const paddedLength = Math.ceil(input.length / 4) * 4
-                this.#bytes = new Uint8Array(paddedLength)
-                this.#bytes.set(input)
-            } else if (input instanceof Object) {
-                this.#value = input
-            }
-        }
-
-        get bytes() {
-            this.#bytes ??= this.serialize(this.#value)
-            return this.#bytes
-        }
-
-        get value() {
-            this.#value ??= this.deserialize(this.#bytes)
-            return this.#value
-        }
 
     }
 
