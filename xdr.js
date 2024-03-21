@@ -356,21 +356,6 @@ export function X(xCode) {
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
-    for (const m of xCode.matchAll(regexStruct)) {
-        const structName = m[1], map = new Map()
-        for (let declaration of m[2].split('\n')) {
-            declaration = declaration.trim()
-            if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
-            if (!declaration) continue
-            if (declaration[0] === ';') continue
-            const { type, length, mode, identifier, optional } = parseTypeLengthModeIdentifier(declaration, constants)
-            if (!type || !identifier) throw new Error(`struct ${structName} has invalid declaration: ${declaration};`)
-            map.set(identifier, { type, length, mode, optional })
-        }
-        structs[structName] = map
-        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
-    }
-
     for (const m of xCode.matchAll(regexUnion)) {
         const unionName = m[1], discriminantDeclaration = m[2], arms = {}
         const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(/\s+/).map(part => part.trim())
@@ -386,13 +371,30 @@ export function X(xCode) {
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
+    let entry
+    for (const m of xCode.matchAll(regexStruct)) {
+        const structName = m[1], map = new Map()
+        for (let declaration of m[2].split('\n')) {
+            declaration = declaration.trim()
+            if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
+            if (!declaration) continue
+            if (declaration[0] === ';') continue
+            const { type, length, mode, identifier, optional } = parseTypeLengthModeIdentifier(declaration, constants)
+            if (!type || !identifier) throw new Error(`struct ${structName} has invalid declaration: ${declaration};`)
+            map.set(identifier, { type, length, mode, optional })
+        }
+        structs[structName] = map
+        entry = structName
+        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+    }
 
-    console.log('line 388', xCode)
 
-    console.log('line 390', JSON.stringify({
-        constants, enums,
+    console.log('line 390', xCode)
+
+    console.log('line 392', JSON.stringify({
+        constants, enums, unions,
         structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])),
-        unions
+        entry
     }, null, 4))
 
     return class extends TypeDef {
