@@ -3,6 +3,8 @@ class TypeDef {
     #bytes
     #value
 
+    static validBytesLength
+
     static serialize(value, instance) {
 
     }
@@ -11,18 +13,29 @@ class TypeDef {
 
     }
 
-    static isValidInput(input) {
+    static isValueInput(input) {
         return input instanceof Object
     }
 
+    static isValidBytesInput(bytes) {
+        switch (this.validBytesLength) {
+            case undefined:
+                return true
+            case true:
+                return bytes.length % 4 === 0
+            default:
+                return Number.isInteger(this.validBytesLength) ? bytes.length === this.validBytesLength : false
+        }
+    }
+
     constructor(input) {
-        super()
         if (!(input instanceof Uint8Array) && Array.isArray(input)) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
+            if (!this.constructor.isValidBytesInput(input)) throw new Error(`Invalid byte length for ${this.constructor.name}: ${input.length}`)
             const paddedLength = Math.ceil(input.length / 4) * 4
             this.#bytes = new Uint8Array(paddedLength)
             this.#bytes.set(input)
-        } else if (this.constructor.isValidInput(input)) {
+        } else if (this.constructor.isValueInput(input)) {
             this.#value = input
         }
     }
@@ -57,7 +70,9 @@ class TypeDef {
 
 class intType extends TypeDef {
 
-    static isValidInput(input) {
+    static validBytesLength = 4
+
+    static isValueInput(input) {
         return Number.isInteger(input)
     }
 
@@ -73,9 +88,8 @@ class intType extends TypeDef {
     }
 
     constructor(input, unsigned) {
-        if (input?.length !== 4) throw new Error('int type must have byte length of 4')
         super(input)
-        this.unsigned = this.constructor.isValidInput(input) ? input >= 0 : !!unsigned
+        this.unsigned = isValueInput ? input >= 0 : !!unsigned
     }
 
 }
@@ -104,7 +118,9 @@ class boolType extends enumType {
 
 class hyperType extends TypeDef {
 
-    static isValidInput(input) {
+    static validBytesLength = 8
+
+    static isValueInput(input) {
         return typeof input === 'bigint'
     }
 
@@ -120,9 +136,8 @@ class hyperType extends TypeDef {
     }
 
     constructor(input, unsigned) {
-        if (input?.length !== 8) throw new Error('hyper type must have byte length of 8')
         super(input)
-        this.unsigned = this.constructor.isValidInput(input) ? input >= 0n : !!unsigned
+        this.unsigned = this.constructor.isValueInput(input) ? input >= 0n : !!unsigned
     }
 
     toJSON() {
@@ -133,7 +148,9 @@ class hyperType extends TypeDef {
 
 class floatType extends TypeDef {
 
-    static isValidInput(input) {
+    static validBytesLength = 4
+
+    static isValueInput(input) {
         return typeof input === 'number'
     }
 
@@ -148,16 +165,13 @@ class floatType extends TypeDef {
         return view.getFloat32(0, false)
     }
 
-    constructor(input, unsigned) {
-        if (input?.length !== 4) throw new Error('float type must have byte length of 4')
-        super(input)
-    }
-
 }
 
 class doubleType extends TypeDef {
 
-    static isValidInput(input) {
+    static validBytesLength = 8
+
+    static isValueInput(input) {
         return typeof input === 'number'
     }
 
@@ -172,11 +186,6 @@ class doubleType extends TypeDef {
         return view.getFloat64(0, false)
     }
 
-    constructor(input, unsigned) {
-        if (input?.length !== 8) throw new Error('double type must have byte length of 8')
-        super(input)
-    }
-
 }
 
 class opaqueType extends TypeDef {
@@ -184,7 +193,7 @@ class opaqueType extends TypeDef {
     #length
     #variable
 
-    static isValidInput(input) {
+    static isValueInput(input) {
         return Array.isArray(input)
     }
 
@@ -224,9 +233,11 @@ class opaqueType extends TypeDef {
 
 class stringType extends TypeDef {
 
+    static validBytesLength = true
+
     #maxLength
 
-    static isValidInput(input) {
+    static isValueInput(input) {
         return typeof input === 'string'
     }
 
@@ -258,7 +269,9 @@ class stringType extends TypeDef {
 
 class voidType extends TypeDef {
 
-    static isValidInput(input) {
+    static validBytesLength = 0
+
+    static isValueInput(input) {
         return input == null
     }
 
@@ -271,7 +284,6 @@ class voidType extends TypeDef {
     }
 
     constructor(input) {
-        if (input != null) throw new Error('void type must be nullish or a zero length array')
         super(input)
     }
 
