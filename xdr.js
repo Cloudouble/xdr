@@ -304,59 +304,85 @@ const XDR = {
 
 export default XDR
 
+const regexConst = /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
+    regexEnum = /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
+    regexStruct = /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g
+
+
 export function X(xCode) {
     if (!xCode || (typeof xCode !== 'string')) return
-    const lines = xCode.split('\n'), definitions = {}
-    let currentType = null, currentEnum = null, currentStruct = null, currentUnion = null,
-        currentlyCommentedLine = false
-    for (let line of lines) {
-        line = line.trim()
-        if (!line) continue
-        if (currentlyCommentedLine) {
-            if (line.endsWith('*/')) currentlyCommentedLine = false
-            continue
-        } else if (line.startsWith('/*')) {
-            currentlyCommentedLine = true
-            continue
-        }
+    xCode = xCode.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*[\r\n]/gm, '').trim()
+    const lines = [], constants = {}, enums = {}, structs = {}, unions = {}, types = {}, identifiers = {}
 
-
-        if (line.startsWith('typedef')) {
-            const [, declaration] = line.split('typedef').map(part => part.trim());
-            const [typeSpecifier, identifier] = declaration.split(/\s+/);
-            definitions[identifier] = typeSpecifier;
-        } else if (line.startsWith('enum')) {
-            const [, identifier, enumBody] = line.split(/enum|\{|\}/).map(part => part.trim());
-            currentEnum = identifier;
-            definitions[currentEnum] = {};
-        } else if (line.startsWith('struct')) {
-            const [, identifier, structBody] = line.split(/struct|\{|\}/).map(part => part.trim());
-            currentStruct = identifier;
-            definitions[currentStruct] = {};
-        } else if (line.startsWith('union')) {
-            const [, identifier, unionBody] = line.split(/union|\{|\}/).map(part => part.trim());
-            currentUnion = identifier;
-            definitions[currentUnion] = {};
-        } else if (line.startsWith('}')) {
-            currentType = null;
-        } else if (currentEnum && line.includes('=')) {
-            const [enumIdentifier, enumValue] = line.split('=').map(part => part.trim());
-            definitions[currentEnum][enumIdentifier] = parseInt(enumValue);
-        } else if (currentStruct) {
-            const [typeSpecifier, identifier] = line.split(/\s+/);
-            definitions[currentStruct][identifier] = typeSpecifier.endsWith(';') ? typeSpecifier.slice(0, -1) : typeSpecifier;
-        } else if (currentUnion) {
-            // TODO: Handle union cases
-        }
-
+    for (const m of xCode.matchAll(regexConst)) {
+        constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
+        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
+
+    for (const m of xCode.matchAll(regexEnum)) {
+        const enumName = m[1], map = {}
+        for (const condition of m[2].split(',')) {
+            let [name, value] = condition.split('=').map(part => part.trim())
+            if (!name || !value) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
+            value = parseInt(value, value[0] === '0' && value[1] !== '.' && value[1] !== 'x' ? 8 : undefined)
+            if (!Number.isInteger(value)) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
+            map[name] = value
+        }
+        enums[enumName] = map
+        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+    }
+
+    for (const m of xCode.matchAll(regexStruct)) {
+        const structName = m[1], map = new Map()
+        for (let declaration of m[2].split('\n')) {
+            declaration = declaration.trim()
+            if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
+            if (!declaration) continue
+            if (declaration[0] === ';') continue
+            let [type, identifier] = declaration.split(/\s+/).map(part => part.trim()), length, mode
+            if (type === 'void') continue
+            const identifierIndexOfLt = identifier.indexOf('<'), identifierIndexOfGt = identifier.indexOf('>'),
+                identifierIndexOfBracketStart = identifier.indexOf('['), identifierIndexOfBracketEnd = identifier.indexOf(']')
+            if ((identifierIndexOfLt > 0) && (identifierIndexOfLt < identifierIndexOfGt)) {
+                length = identifier.slice(identifierIndexOfLt + 1, identifierIndexOfGt)
+                length = parseInt(length) || constants[length] || undefined
+                mode = 'variable'
+                identifier = identifier.slice(0, identifierIndexOfLt)
+            } else if ((identifierIndexOfBracketStart > 0) && (identifierIndexOfBracketStart < identifierIndexOfBracketEnd)) {
+                length = identifier.slice(identifierIndexOfBracketStart + 1, identifierIndexOfBracketEnd)
+                length = parseInt(length) || constants[length] || undefined
+                mode = 'fixed'
+                identifier = identifier.slice(0, identifierIndexOfBracketStart)
+            }
+            if (!type || !identifier) throw new Error(`struct ${structName} has invalid declaration: ${declaration};`)
+            map.set(identifier, { type, length, mode })
+        }
+        structs[structName] = map
+        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+    }
+
+
+    console.log('line 352', xCode)
+
+    console.log('line 354', JSON.stringify({
+        constants, enums,
+        structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())]))
+    }, null, 4))
 
     return class extends TypeDef {
 
         static serialize(value) {
+            // takes a value and returns a Uint8Array
+
         }
 
         static deserialize(bytes) {
+            // takes a Uint8Array and returns a value
+
+        }
+
+        constructor(input) {
+            super(input)
         }
 
     }
@@ -368,6 +394,33 @@ export function X(xCode) {
 
 
 
+// if (line.startsWith('typedef')) {
+//     const [, declaration] = line.split('typedef').map(part => part.trim());
+//     const [typeSpecifier, identifier] = declaration.split(/\s+/);
+//     definitions[identifier] = typeSpecifier;
+// } else if (line.startsWith('enum')) {
+//     const [, identifier, enumBody] = line.split(/enum|\{|\}/).map(part => part.trim());
+//     currentEnum = identifier;
+//     definitions[currentEnum] = {};
+// } else if (line.startsWith('struct')) {
+//     const [, identifier, structBody] = line.split(/struct|\{|\}/).map(part => part.trim());
+//     currentStruct = identifier;
+//     definitions[currentStruct] = {};
+// } else if (line.startsWith('union')) {
+//     const [, identifier, unionBody] = line.split(/union|\{|\}/).map(part => part.trim());
+//     currentUnion = identifier;
+//     definitions[currentUnion] = {};
+// } else if (line.startsWith('}')) {
+//     currentType = null;
+// } else if (currentEnum && line.includes('=')) {
+//     const [enumIdentifier, enumValue] = line.split('=').map(part => part.trim());
+//     definitions[currentEnum][enumIdentifier] = parseInt(enumValue);
+// } else if (currentStruct) {
+//     const [typeSpecifier, identifier] = line.split(/\s+/);
+//     definitions[currentStruct][identifier] = typeSpecifier.endsWith(';') ? typeSpecifier.slice(0, -1) : typeSpecifier;
+// } else if (currentUnion) {
+//     // TODO: Handle union cases
+// }
 
 
 
