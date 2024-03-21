@@ -371,7 +371,6 @@ export function X(xCode) {
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
-    let entry
     for (const m of xCode.matchAll(regexStruct)) {
         const structName = m[1], map = new Map()
         for (let declaration of m[2].split('\n')) {
@@ -384,14 +383,22 @@ export function X(xCode) {
             map.set(identifier, { type, length, mode, optional })
         }
         structs[structName] = map
-        entry = structName
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
+    let entry
+    const dependedTypes = new Set()
+    for (const name in unions) for (const a in unions[name].arms) dependedTypes.add(unions[name].arms[a].type)
+    for (const name in structs) for (const p in structs[name]) dependedTypes.add(structs[name][p].type)
+    for (const name of Object.keys(structs).concat(Object.keys(unions))) {
+        if (!dependedTypes.has(name)) entry = name
+        if (entry) break
+    }
+    if (!entry) throw new Error('no entry found')
 
-    console.log('line 392', xCode)
 
-    console.log('line 394', JSON.stringify({
+    console.log('line 400', xCode)
+    console.log('line 401', JSON.stringify({
         constants, enums, unions,
         structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])),
         entry
