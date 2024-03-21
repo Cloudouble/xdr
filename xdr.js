@@ -223,40 +223,31 @@ class opaqueType extends TypeDef {
 }
 
 class stringType extends TypeDef {
-    #bytes
-    #value
+
     #maxLength
 
+    static isValidInput(input) {
+        return typeof input === 'string'
+    }
+
+    static serialize(value) {
+        const paddedLength = Math.ceil(value.length / 4) * 4
+        const bytes = new Uint8Array(4 + paddedLength)
+        const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+        view.setUint32(0, value.length, false)
+        bytes.set(new Uint8Array(buffer))
+        bytes.set((new TextEncoder()).encode(value), 4)
+        return bytes
+    }
+
+    static deserialize(bytes) {
+        const view = new DataView(bytes.buffer), stringLength = view.getUint32(0, false)
+        return String.fromCharCode(...(new Uint8Array(bytes.buffer, 4, stringLength)))
+    }
+
     constructor(input, maxLength) {
-        super()
-        this.#maxLength = maxLength
-        if (Array.isArray(input)) input = new Uint8Array(input)
-        if (input instanceof Uint8Array) {
-            if (maxLength && (input.length > maxLength)) throw new Error(`string type must have maximum byte length of ${maxLength}`)
-            this.#bytes = input
-        } else if (typeof input === 'string') {
-            this.#value = input
-        }
-    }
-
-    get bytes() {
-        if (!this.#bytes) {
-            const paddedLength = Math.ceil(this.#value.length / 4) * 4
-            this.#bytes = new Uint8Array(4 + paddedLength)
-            const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-            view.setUint32(0, this.#value.length, false)
-            this.#bytes.set(new Uint8Array(buffer))
-            this.#bytes.set((new TextEncoder()).encode(this.#value), 4)
-        }
-        return this.#bytes
-    }
-
-    get value() {
-        if (this.#value === undefined) {
-            const view = new DataView(this.#bytes.buffer), stringLength = view.getUint32(0, false)
-            this.#value = String.fromCharCode(...(new Uint8Array(this.#bytes.buffer, 4, stringLength)))
-        }
-        return this.#value
+        super(input)
+        if (maxLength && (this.value > maxLength)) throw new Error(`string type must have maximum byte length of ${maxLength}`)
     }
 
     get maxLength() {
