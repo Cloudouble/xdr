@@ -11,11 +11,13 @@
 
     <link rel="modulepreload" href="../xdr.js">
     <script type="module">
-        import XDR from "../xdr.js"
+        import XDR, { X } from "../xdr.js"
 
         console.log('line 16', XDR)
 
         window.xdr = XDR
+
+        window.x = X
 
     </script>
 
