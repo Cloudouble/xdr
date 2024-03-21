@@ -257,20 +257,22 @@ class stringType extends TypeDef {
 }
 
 class voidType extends TypeDef {
-    #bytes
-    #value
-    constructor() {
-        super()
-        this.#bytes = new Uint8Array(0)
-        this.#value = null
+
+    static isValidInput(input) {
+        return input == null
     }
 
-    get bytes() {
-        return this.#bytes
+    static serialize(value) {
+        return new Uint8Array(0)
     }
 
-    get value() {
-        return this.#value
+    static deserialize(bytes) {
+        return null
+    }
+
+    constructor(input) {
+        if (input != null) throw new Error('void type must be nullish or a zero length array')
+        super(input)
     }
 
 }
