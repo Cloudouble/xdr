@@ -308,14 +308,18 @@ export default XDR
 const rx = {
     'const': /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
     'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
-    'struct': /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
-    'union': /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
-    'typedef': /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g
+    struct: /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
+    union: /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
+    typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g,
+    unsigned: /^unsigned\s+/,
+    space: /\s+/,
+    comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
+    blankLines: /^\s*[\r\n]/gm
 }
 
 const parseTypeLengthModeIdentifier = function (declaration, constants) {
     let unsigned = declaration.slice(0, 9) === 'unsigned ' ? true : undefined,
-        [type, identifier] = declaration.replace(/^unsigned\s+/, '').split(/\s+/).map(part => part.trim()), length, mode, optional
+        [type, identifier] = declaration.replace(rx.unsigned, '').split(rx.space).map(part => part.trim()), length, mode, optional
     if (identifier && identifier[0] === '*') {
         identifier = identifier.slice(1)
         optional = true
@@ -342,18 +346,18 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
 
 export function X(xCode) {
     if (!xCode || (typeof xCode !== 'string')) return
-    xCode = xCode.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '').replace(/^\s*[\r\n]/gm, '').trim()
+    xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const lines = [], constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
 
     for (const m of xCode.matchAll(rx.const)) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
-        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
 
     for (const t of xCode.matchAll(rx.typedef)) {
         const typeObj = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
         typedefs[typeObj.identifier] = typeObj
-        xCode = xCode.replace(t[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+        xCode = xCode.replace(t[0], '').replace(rx.blankLines, '').trim()
     }
 
     for (const m of xCode.matchAll(rx.enum)) {
@@ -367,12 +371,12 @@ export function X(xCode) {
             map[name] = value
         }
         enums[enumName] = map
-        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
 
     for (const m of xCode.matchAll(rx.union)) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', unionName = isTypeDef ? m[6] : m[1], discriminantDeclaration = isTypeDef ? m[4] : m[2], arms = {}
-        const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(/\s+/).map(part => part.trim())
+        const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim())
         const discriminant = { type: discriminantType, value: discriminantValue }
         const unionBody = isTypeDef ? m[5] : m[3]
         for (let caseSpec of unionBody.split(';')) {
@@ -383,7 +387,7 @@ export function X(xCode) {
             arms[discriminantValue] = { type, length, mode, identifier }
         }
         unions[unionName] = { discriminant, arms }
-        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
 
     for (const m of xCode.matchAll(rx.struct)) {
@@ -400,7 +404,7 @@ export function X(xCode) {
             map.set(identifier, { type, length, mode, optional, unsigned })
         }
         structs[structName] = map
-        xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
 
     let entry
