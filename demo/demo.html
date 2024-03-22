@@ -39,6 +39,7 @@
          };
 
          typedef egg eggbox[12];
+         typedef unsigned int uint32;
 
          /*
           * A complete file:
@@ -50,6 +51,12 @@
             opaque *data<MAXFILELEN>;     /* file data       */
          };
 `
+        // also needs to support the following formats:
+        // 
+        // case ABC: struct {} identifier; 
+        // case ABC: case DEF: void; (multiple cases to one result)
+        // case ABC: union switch (d) {case: DEF: ...} (nested unions within cases)
+
 
 
         console.log('line 53', XDR)

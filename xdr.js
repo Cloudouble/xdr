@@ -309,12 +309,16 @@ const regexConst = /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g
     regexEnum = /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
     regexStruct = /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
     regexUnion = /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;/g,
-    regexTypeDef = /typedef\s+(\w+)\s+([\w\[\]\*]+)\s*;/g
+    regexTypeDef = /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\*]+)\s*;/g
 
 const parseTypeLengthModeIdentifier = function (declaration, constants) {
-    let [type, identifier] = declaration.split(/\s+/).map(part => part.trim()), length, mode, optional
+    let unsigned = declaration.slice(0, 9) === 'unsigned ' ? true : undefined,
+        [type, identifier] = declaration.replace(/^unsigned\s+/, '').split(/\s+/).map(part => part.trim()), length, mode, optional
     if (identifier && identifier[0] === '*') {
         identifier = identifier.slice(1)
+        optional = true
+    } else if (type && type.endsWith('*')) {
+        type = type.slice(0, -1)
         optional = true
     }
     if (type === 'void') return { type, length, mode, identifier, optional }
@@ -331,17 +335,23 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
         mode = 'fixed'
         identifier = identifier.slice(0, identifierIndexOfBracketStart)
     }
-    return { type, length, mode, identifier, optional }
+    return { type, length, mode, identifier, optional, unsigned }
 }
 
 export function X(xCode) {
     if (!xCode || (typeof xCode !== 'string')) return
-    xCode = xCode.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*[\r\n]/gm, '').trim()
+    xCode = xCode.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '').replace(/^\s*[\r\n]/gm, '').trim()
     const lines = [], constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
 
     for (const m of xCode.matchAll(regexConst)) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
+    }
+
+    for (const t of xCode.matchAll(regexTypeDef)) {
+        const typeObj = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
+        typedefs[typeObj.identifier] = typeObj
+        xCode = xCode.replace(t[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
     for (const m of xCode.matchAll(regexEnum)) {
@@ -357,11 +367,6 @@ export function X(xCode) {
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
-    for (const t of xCode.matchAll(regexTypeDef)) {
-        const typeObj = parseTypeLengthModeIdentifier(`${t[1]} ${t[2]}`)
-        typedefs[typeObj.identifier] = typeObj
-    }
-
     for (const m of xCode.matchAll(regexUnion)) {
         const unionName = m[1], discriminantDeclaration = m[2], arms = {}
         const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(/\s+/).map(part => part.trim())
@@ -370,7 +375,7 @@ export function X(xCode) {
             caseSpec = caseSpec.trim().replace('case ', '').trim()
             if (!caseSpec) continue
             const [discriminantValue, armDeclaration] = caseSpec.split(':').map(part => part.trim())
-            const { type, length, mode, identifier } = parseTypeLengthModeIdentifier(armDeclaration, constants)
+            const { type, length, mode, identifier, optional, unsigned } = parseTypeLengthModeIdentifier(armDeclaration, constants)
             arms[discriminantValue] = { type, length, mode, identifier }
         }
         unions[unionName] = { discriminant, arms }
@@ -384,9 +389,9 @@ export function X(xCode) {
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
             if (!declaration) continue
             if (declaration[0] === ';') continue
-            const { type, length, mode, identifier, optional } = parseTypeLengthModeIdentifier(declaration, constants)
+            const { type, length, mode, identifier, optional, unsigned } = parseTypeLengthModeIdentifier(declaration, constants)
             if (!type || !identifier) throw new Error(`struct ${structName} has invalid declaration: ${declaration};`)
-            map.set(identifier, { type, length, mode, optional })
+            map.set(identifier, { type, length, mode, optional, unsigned })
         }
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
@@ -402,12 +407,10 @@ export function X(xCode) {
     }
     if (!entry) throw new Error('no entry found')
 
-
-    console.log('line 400', xCode)
-    console.log('line 401', JSON.stringify({
-        constants, enums, unions, typedefs,
-        structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])),
-        entry
+    console.log('line 410', xCode)
+    console.log('line 411', JSON.stringify({
+        entry, constants, enums, typedefs, unions,
+        structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())]))
     }, null, 4))
 
     return class extends TypeDef {
