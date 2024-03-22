@@ -65,6 +65,15 @@
             string owner<MAXUSERNAME>;   /* owner of file   */
             opaque *data<MAXFILELEN>;     /* file data       */
          };
+
+         typedef struct {
+            string filename<MAXNAMELEN>; /* name of file    */
+            filetype type;               /* info about file */
+            string owner<MAXUSERNAME>;   /* owner of file   */
+            opaque *data<MAXFILELEN>;     /* file data       */
+         } fileA;
+
+
 `
         // also needs to support the following formats:
         // 

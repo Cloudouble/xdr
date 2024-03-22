@@ -308,7 +308,7 @@ export default XDR
 const rx = {
     'const': /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
     'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
-    'struct': /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
+    'struct': /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     'union': /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     'typedef': /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g
 }
@@ -387,8 +387,10 @@ export function X(xCode) {
     }
 
     for (const m of xCode.matchAll(rx.struct)) {
-        const structName = m[1], map = new Map()
-        for (let declaration of m[2].split('\n')) {
+        const isTypeDef = m[0].slice(0, 8) === 'typedef '
+        const structName = isTypeDef ? m[4] : m[1], map = new Map()
+        const structBody = isTypeDef ? m[3] : m[2]
+        for (let declaration of structBody.split('\n')) {
             declaration = declaration.trim()
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
             if (!declaration) continue
