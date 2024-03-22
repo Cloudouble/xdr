@@ -395,10 +395,15 @@ export function X(xCode) {
         const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim())
         const discriminant = { type: discriminantType, value: discriminantValue }
         const unionBody = isTypeDef ? m[5] : m[3]
+        const queuedArms = []
         for (let caseSpec of unionBody.split('case ')) {
             caseSpec = caseSpec.trim()
             if (!caseSpec) continue
             let [discriminantValue, armDeclaration] = caseSpec.split(':').map(part => part.trim())
+            if (!armDeclaration) {
+                queuedArms.push(discriminantValue)
+                continue
+            }
             if (armDeclaration[armDeclaration.length - 1] === ';') armDeclaration = armDeclaration.slice(0, -1).trim()
             switch (armDeclaration.split(rx.space)[0]) {
                 case 'struct':
@@ -417,6 +422,10 @@ export function X(xCode) {
                     break
                 default:
                     arms[discriminantValue] = parseTypeLengthModeIdentifier(armDeclaration, constants)
+            }
+            if (queuedArms.length) {
+                for (const d of queuedArms) arms[d] = { ...arms[discriminantValue] }
+                queuedArms.length = 0
             }
         }
         return [unionName, discriminant, arms]
