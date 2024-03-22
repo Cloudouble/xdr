@@ -453,8 +453,7 @@ export function X(xCode) {
     }
     if (!entry) throw new Error('no entry found')
 
-    console.log('line 410', xCode)
-    console.log('line 411', JSON.stringify({
+    console.log('line 456', JSON.stringify({
         entry, constants, enums, typedefs, unions,
         structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())]))
     }, null, 4))

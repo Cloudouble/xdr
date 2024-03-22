@@ -26,11 +26,6 @@
             EXEC = 2        // executable
          };
 
-         typedef enum {    /* using typedef */
-            FALSE = 0,
-            TRUE = 1
-         } boolA;
-
          /*
           * File information, per kind of file:
           */
@@ -43,26 +38,6 @@
             string interpretor<MAXNAMELEN>; /* program interpretor  */
          };
 
-         typedef union switch (filekind kind) {
-         case TEXT:
-            void;                           /* no extra information */
-         case DATA:
-            string creator<MAXNAMELEN>;     /* data creator         */
-         case EXEC:
-            string interpretor<MAXNAMELEN>; /* program interpretor  */
-         } filetypeA;
-
-         union filetypeB switch (filekind kind) {
-         case TEXT:
-         case DATA:
-            string creator<MAXNAMELEN>;     /* data creator         */
-         case EXEC:
-            string interpretor<MAXNAMELEN>; /* program interpretor  */
-         };
-
-         typedef egg eggbox[12];
-         typedef unsigned int uint32;
-
          /*
           * A complete file:
           */
@@ -72,35 +47,13 @@
             string owner<MAXUSERNAME>;   /* owner of file   */
             opaque *data<MAXFILELEN>;     /* file data       */
          };
-
-         typedef struct {
-            string filename<MAXNAMELEN>; /* name of file    */
-            filetype type;               /* info about file */
-            string owner<MAXUSERNAME>;   /* owner of file   */
-            opaque *data<MAXFILELEN>;     /* file data       */
-         } fileA;
-
-         union RevokeSponsorshipOp switch (RevokeSponsorshipType type)
-        {
-        case REVOKE_SPONSORSHIP_LEDGER_ENTRY:
-            LedgerKey ledgerKey;
-        case REVOKE_SPONSORSHIP_SIGNER:
-            struct
-            {
-                AccountID accountID;
-                SignerKey signerKey;
-            } signer;
-        };
-
-
-
 `
 
-        console.log('line 99', XDR)
+        console.log('line 52', XDR)
 
         const customType = X(xCode)
 
-        console.log('line 103', customType)
+        console.log('line 56', customType)
 
         window.xdr = XDR
         window.x = X
