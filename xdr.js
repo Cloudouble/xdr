@@ -1,10 +1,8 @@
 class TypeDef {
 
     #bytes
+    #tail
     #value
-
-    #consumedBytes
-    #unconsumedBytes
 
     static minBytesLength
 
@@ -23,27 +21,24 @@ class TypeDef {
     }
 
     constructor(input) {
-        if (!(input instanceof Uint8Array) && Array.isArray(input)) input = new Uint8Array(input)
+        if (!(input instanceof Uint8Array) && Array.isArray(input) && input.every(i => Number.isInteger(i) && (i >= 0) && (i <= 255))) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
-            [this.#consumedBytes, this.#unconsumedBytes] = this.#consume(input)
-            const paddedLength = Math.ceil(input.length / 4) * 4
-            this.#bytes = new Uint8Array(paddedLength)
-            this.#bytes.set(input)
+            [this.#bytes, this.#tail] = this.#consume(input)
         } else if (this.constructor.isValueInput(input)) {
             this.#value = input
+        } else {
+            throw new Error(`Invalid input for ${this.constructor.name}: ${input}`)
         }
     }
 
     consume(bytes) {
         let cursor = 0
-        return [new Uint8Array(cursor), bytes.subarray(cursor)]
+        return [bytes.subarray(0, cursor), bytes.subarray(cursor)]
     }
 
     get bytes() { return this.#bytes ??= this.constructor.serialize.bind(this)(this.#value) }
 
-    get consumedBytes() { return this.#consumedBytes }
-
-    get unconsumedBytes() { return this.#unconsumedBytes }
+    get tail() { return this.#tail }
 
     get value() { return this.#value ??= this.constructor.deserialize.bind(this)(this.#bytes) }
 
@@ -88,6 +83,11 @@ class intType extends TypeDef {
     constructor(input, unsigned) {
         super(input)
         this.unsigned = this.constructor.isValueInput ? input >= 0 : !!unsigned
+    }
+
+    consume(bytes) {
+        let cursor = 0
+        return [new Uint8Array(cursor), bytes.subarray(cursor)]
     }
 
 }
