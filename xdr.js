@@ -1,6 +1,7 @@
 class TypeDef {
 
     #bytes
+    #bytesLength
     #tail
     #value
 
@@ -20,10 +21,10 @@ class TypeDef {
         return Number.isInteger(this.constructor.minBytesLength) ? (bytes.length >= this.constructor.minBytesLength) : true
     }
 
-    constructor(input) {
+    constructor(input, ...consumeArgs) {
         if (!(input instanceof Uint8Array) && Array.isArray(input) && input.every(i => Number.isInteger(i) && (i >= 0) && (i <= 255))) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
-            [this.#bytes, this.#tail] = this.#consume(input)
+            [this.#bytes, this.#tail] = this.#consume(input, ...consumeArgs)
         } else if (this.constructor.isValueInput(input)) {
             this.#value = input
         } else {
@@ -37,6 +38,8 @@ class TypeDef {
     }
 
     get bytes() { return this.#bytes ??= this.constructor.serialize.bind(this)(this.#value) }
+
+    get bytesLength() { return this.#bytesLength ??= this.bytes.length }
 
     get tail() { return this.#tail }
 
@@ -54,9 +57,9 @@ class TypeDef {
 
     valueOf() { return this.value }
 
-    #consume(bytes) {
+    #consume(bytes, ...consumeArgs) {
         if (!this.constructor.isMinBytesInput(bytes)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
-        return this.consume(bytes)
+        return this.consume(bytes, ...consumeArgs)
     }
 
 }
@@ -183,6 +186,7 @@ class doubleType extends TypeDef {
 
 class opaqueType extends TypeDef {
 
+    #variableLength
     #length
     #mode
 
@@ -204,24 +208,40 @@ class opaqueType extends TypeDef {
     }
 
     static deserialize(bytes) {
-        return Array.from(bytes)
+        return this.mode === 'fixed' ? Array.from(bytes) : Array.from(bytes.subarray(4))
     }
 
     constructor(input, mode, length) {
-        super(input)
-        if (length && (input.length > length)) throw new Error(`opaque type must have byte length less than or equal to ${length}`)
-        length ||= input.length
+        if (mode !== 'variable') mode = 'fixed'
+        super(input, mode, length)
         this.#length = length
-        this.#mode = mode === 'variable' ? 'variable' : 'fixed'
+        this.#mode = mode
     }
 
-    get length() {
-        return this.#length
+    consume(bytes, mode, length) {
+        let cursor
+        switch (mode) {
+            case 'fixed':
+                length ??= 0
+                if (bytes.length < length) throw new Error(`Insufficient consumable byte length for fixed length ${this.constructor.name}: ${bytes.length}`)
+                cursor = length
+                break
+            case 'variable':
+                const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+                this.#variableLength = view.getUint32(0, false)
+                if (length && (this.#variableLength > length)) throw new Error(`Maximum variable length exceeded for ${this.constructor.name}: ${bytes.length}`)
+                if (bytes.length < (4 + this.#variableLength)) throw new Error(`Insufficient consumable byte length for variable length ${this.constructor.name}: ${bytes.length}`)
+                cursor = 4 + this.#variableLength
+                break
+        }
+        return [bytes.subarray(0, cursor), bytes.subarray(cursor)]
     }
 
-    get mode() {
-        return this.#mode
-    }
+    get length() { return this.#length }
+
+    get mode() { return this.#mode }
+
+    get variableLength() { return this.#variableLength }
 
 }
 
