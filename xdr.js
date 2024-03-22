@@ -374,23 +374,7 @@ export function X(xCode) {
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
 
-    for (const m of xCode.matchAll(rx.union)) {
-        const isTypeDef = m[0].slice(0, 8) === 'typedef ', unionName = isTypeDef ? m[6] : m[1], discriminantDeclaration = isTypeDef ? m[4] : m[2], arms = {}
-        const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim())
-        const discriminant = { type: discriminantType, value: discriminantValue }
-        const unionBody = isTypeDef ? m[5] : m[3]
-        for (let caseSpec of unionBody.split(';')) {
-            caseSpec = caseSpec.trim().replace('case ', '').trim()
-            if (!caseSpec) continue
-            const [discriminantValue, armDeclaration] = caseSpec.split(':').map(part => part.trim())
-            const { type, length, mode, identifier, optional, unsigned } = parseTypeLengthModeIdentifier(armDeclaration, constants)
-            arms[discriminantValue] = { type, length, mode, identifier }
-        }
-        unions[unionName] = { discriminant, arms }
-        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
-    }
-
-    for (const m of xCode.matchAll(rx.struct)) {
+    const buildStructFromMatch = function (m) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef '
         const structName = isTypeDef ? m[4] : m[1], map = new Map()
         const structBody = isTypeDef ? m[3] : m[2]
@@ -403,6 +387,49 @@ export function X(xCode) {
             if (!type || !identifier) throw new Error(`struct ${structName} has invalid declaration: ${declaration};`)
             map.set(identifier, { type, length, mode, optional, unsigned })
         }
+        return [structName, map]
+    }
+
+    const buildUnionFromMatch = function (m) {
+        const isTypeDef = m[0].slice(0, 8) === 'typedef ', unionName = isTypeDef ? m[6] : m[1], discriminantDeclaration = isTypeDef ? m[4] : m[2], arms = {}
+        const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim())
+        const discriminant = { type: discriminantType, value: discriminantValue }
+        const unionBody = isTypeDef ? m[5] : m[3]
+        for (let caseSpec of unionBody.split('case ')) {
+            caseSpec = caseSpec.trim()
+            if (!caseSpec) continue
+            let [discriminantValue, armDeclaration] = caseSpec.split(':').map(part => part.trim())
+            if (armDeclaration[armDeclaration.length - 1] === ';') armDeclaration = armDeclaration.slice(0, -1).trim()
+            switch (armDeclaration.split(rx.space)[0]) {
+                case 'struct':
+                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.struct)) {
+                        const [structName, map] = buildStructFromMatch(mm)
+                        structs[structName] = map
+                        arms[discriminantValue] = { type: structName }
+                    }
+                    break
+                case 'union':
+                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.union)) {
+                        const [unionName, map] = buildUnionFromMatch(mm)
+                        unions[unionName] = map
+                        arms[discriminantValue] = { type: unionName }
+                    }
+                    break
+                default:
+                    arms[discriminantValue] = parseTypeLengthModeIdentifier(armDeclaration, constants)
+            }
+        }
+        return [unionName, discriminant, arms]
+    }
+
+    for (const m of xCode.matchAll(rx.union)) {
+        const [unionName, discriminant, arms] = buildUnionFromMatch(m)
+        unions[unionName] = { discriminant, arms }
+        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
+    }
+
+    for (const m of xCode.matchAll(rx.struct)) {
+        const [structName, map] = buildStructFromMatch(m)
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
