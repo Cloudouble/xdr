@@ -305,11 +305,13 @@ const XDR = {
 
 export default XDR
 
-const regexConst = /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
-    regexEnum = /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
-    regexStruct = /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
-    regexUnion = /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;/g,
-    regexTypeDef = /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\*]+)\s*;/g
+const rx = {
+    'const': /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
+    'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
+    'struct': /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;/g,
+    'union': /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
+    'typedef': /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g
+}
 
 const parseTypeLengthModeIdentifier = function (declaration, constants) {
     let unsigned = declaration.slice(0, 9) === 'unsigned ' ? true : undefined,
@@ -343,20 +345,21 @@ export function X(xCode) {
     xCode = xCode.replace(/\/\*[\s\S]*?\*\/|\/\/.*$/gm, '').replace(/^\s*[\r\n]/gm, '').trim()
     const lines = [], constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
 
-    for (const m of xCode.matchAll(regexConst)) {
+    for (const m of xCode.matchAll(rx.const)) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
-    for (const t of xCode.matchAll(regexTypeDef)) {
+    for (const t of xCode.matchAll(rx.typedef)) {
         const typeObj = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
         typedefs[typeObj.identifier] = typeObj
         xCode = xCode.replace(t[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
-    for (const m of xCode.matchAll(regexEnum)) {
-        const enumName = m[1], map = {}
-        for (const condition of m[2].split(',')) {
+    for (const m of xCode.matchAll(rx.enum)) {
+        const isTypeDef = m[0].slice(0, 8) === 'typedef ', enumName = isTypeDef ? m[4] : m[1],
+            enumBody = isTypeDef ? m[3] : m[2], map = {}
+        for (const condition of enumBody.split(',')) {
             let [name, value] = condition.split('=').map(part => part.trim())
             if (!name || !value) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
             value = parseInt(value, value[0] === '0' && value[1] !== '.' && value[1] !== 'x' ? 8 : undefined)
@@ -367,11 +370,12 @@ export function X(xCode) {
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
-    for (const m of xCode.matchAll(regexUnion)) {
-        const unionName = m[1], discriminantDeclaration = m[2], arms = {}
+    for (const m of xCode.matchAll(rx.union)) {
+        const isTypeDef = m[0].slice(0, 8) === 'typedef ', unionName = isTypeDef ? m[6] : m[1], discriminantDeclaration = isTypeDef ? m[4] : m[2], arms = {}
         const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(/\s+/).map(part => part.trim())
         const discriminant = { type: discriminantType, value: discriminantValue }
-        for (let caseSpec of m[3].split(';')) {
+        const unionBody = isTypeDef ? m[5] : m[3]
+        for (let caseSpec of unionBody.split(';')) {
             caseSpec = caseSpec.trim().replace('case ', '').trim()
             if (!caseSpec) continue
             const [discriminantValue, armDeclaration] = caseSpec.split(':').map(part => part.trim())
@@ -382,7 +386,7 @@ export function X(xCode) {
         xCode = xCode.replace(m[0], '').replace(/^\s*[\r\n]/gm, '').trim()
     }
 
-    for (const m of xCode.matchAll(regexStruct)) {
+    for (const m of xCode.matchAll(rx.struct)) {
         const structName = m[1], map = new Map()
         for (let declaration of m[2].split('\n')) {
             declaration = declaration.trim()

@@ -26,6 +26,11 @@
             EXEC = 2        /* executable */
          };
 
+         typedef enum {    /* using typedef */
+            FALSE = 0,
+            TRUE = 1
+         } boolA;
+
          /*
           * File information, per kind of file:
           */
@@ -37,6 +42,16 @@
          case EXEC:
             string interpretor<MAXNAMELEN>; /* program interpretor  */
          };
+
+         typedef union switch (filekind kind) {
+         case TEXT:
+            void;                           /* no extra information */
+         case DATA:
+            string creator<MAXNAMELEN>;     /* data creator         */
+         case EXEC:
+            string interpretor<MAXNAMELEN>; /* program interpretor  */
+         } filetypeA;
+
 
          typedef egg eggbox[12];
          typedef unsigned int uint32;
