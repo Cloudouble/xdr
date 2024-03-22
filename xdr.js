@@ -4,7 +4,7 @@ class TypeDef {
     #tail
     #value
 
-    static minBytesLength
+    static minBytesLength = 0
 
     static serialize(value, instance) {
 
@@ -32,7 +32,7 @@ class TypeDef {
     }
 
     consume(bytes) {
-        let cursor = 0
+        let cursor = this.constructor.minBytesLength
         return [bytes.subarray(0, cursor), bytes.subarray(cursor)]
     }
 
@@ -85,11 +85,6 @@ class intType extends TypeDef {
         this.unsigned = this.constructor.isValueInput ? input >= 0 : !!unsigned
     }
 
-    consume(bytes) {
-        let cursor = 4
-        return [bytes.subarray(0, cursor), bytes.subarray(cursor)]
-    }
-
 }
 
 class enumType extends intType {
@@ -110,13 +105,13 @@ class enumType extends intType {
 class boolType extends enumType {
     constructor(input) {
         input = !!input
-        super(input, { true: 1, false: 0 })
+        super(input, [false, true])
     }
 }
 
 class hyperType extends TypeDef {
 
-    static validBytesLength = 8
+    static minBytesLength = 8
 
     static isValueInput(input) {
         return typeof input === 'bigint'
@@ -129,7 +124,7 @@ class hyperType extends TypeDef {
     }
 
     static deserialize(bytes) {
-        const view = new DataView(bytes.buffer)
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
         return this.unsigned ? view.getBigUint64(0, false) : view.getBigInt64(0, false)
     }
 
@@ -146,7 +141,7 @@ class hyperType extends TypeDef {
 
 class floatType extends TypeDef {
 
-    static validBytesLength = 4
+    static minBytesLength = 4
 
     static isValueInput(input) {
         return typeof input === 'number'
@@ -159,7 +154,7 @@ class floatType extends TypeDef {
     }
 
     static deserialize(bytes) {
-        const view = new DataView(bytes.buffer)
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
         return view.getFloat32(0, false)
     }
 
@@ -167,7 +162,7 @@ class floatType extends TypeDef {
 
 class doubleType extends TypeDef {
 
-    static validBytesLength = 8
+    static minBytesLength = 8
 
     static isValueInput(input) {
         return typeof input === 'number'
@@ -180,7 +175,7 @@ class doubleType extends TypeDef {
     }
 
     static deserialize(bytes) {
-        const view = new DataView(bytes.buffer)
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
         return view.getFloat64(0, false)
     }
 
@@ -268,8 +263,6 @@ class stringType extends TypeDef {
 
 class voidType extends TypeDef {
 
-    static validBytesLength = 0
-
     static isValueInput(input) {
         return input == null
     }
@@ -280,10 +273,6 @@ class voidType extends TypeDef {
 
     static deserialize(bytes) {
         return null
-    }
-
-    constructor(input) {
-        super(input)
     }
 
 }
