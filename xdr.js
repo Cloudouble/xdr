@@ -93,18 +93,18 @@ class intType extends TypeDef {
 }
 
 class enumType extends intType {
-    #map
-    #name
-    constructor(name, map) {
-        if (!map || (typeof map !== 'object')
-            || !Object.keys(map).length || !Object.values(map).every(v => Number.isInteger(v) && (v >= 0))) throw new Error('enum must have a mapping object')
-        if (!(name in map)) throw new Error(`enum name ${name} not found in map`)
-        super(map[name], true)
-        this.#name = name
-        this.#map = { ...map }
+    #body
+    #identifier
+    constructor(input, body) {
+        super(input, true)
+        if (!body || !Array.isArray(body) || !body.length || !body.every(i => typeof i === 'string')) throw new Error('enum must have a body array of string identifiers')
+        this.#body = [...body]
+        const value = this.value
+        if (body[value] === undefined) throw new Error(`no enum identifier found with value ${value}`)
+        this.#identifier = body[value]
     }
-    get name() { return this.#name }
-    get map() { return this.#map }
+    get identifier() { return this.#identifier }
+    get body() { return this.#body }
 }
 
 class boolType extends enumType {
@@ -360,15 +360,15 @@ export function X(xCode) {
 
     for (const m of xCode.matchAll(rx.enum)) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', enumName = isTypeDef ? m[4] : m[1],
-            enumBody = isTypeDef ? m[3] : m[2], map = {}
+            enumBody = isTypeDef ? m[3] : m[2], body = []
         for (const condition of enumBody.split(',')) {
             let [name, value] = condition.split('=').map(part => part.trim())
             if (!name || !value) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
             value = parseInt(value, value[0] === '0' && value[1] !== '.' && value[1] !== 'x' ? 8 : undefined)
             if (!Number.isInteger(value)) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
-            map[name] = value
+            body[value] = name
         }
-        enums[enumName] = map
+        enums[enumName] = body
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
 
