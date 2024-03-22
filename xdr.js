@@ -63,7 +63,7 @@ class TypeDef {
 
 class intType extends TypeDef {
 
-    static validBytesLength = 4
+    static minBytesLength = 4
 
     static isValueInput(input) {
         return Number.isInteger(input)
@@ -76,7 +76,7 @@ class intType extends TypeDef {
     }
 
     static deserialize(bytes) {
-        const view = new DataView(bytes.buffer)
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
         return this.unsigned ? view.getUint32(0, false) : view.getInt32(0, false)
     }
 
@@ -86,8 +86,8 @@ class intType extends TypeDef {
     }
 
     consume(bytes) {
-        let cursor = 0
-        return [new Uint8Array(cursor), bytes.subarray(cursor)]
+        let cursor = 4
+        return [bytes.subarray(0, cursor), bytes.subarray(cursor)]
     }
 
 }
