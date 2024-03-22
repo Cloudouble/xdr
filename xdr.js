@@ -3,7 +3,10 @@ class TypeDef {
     #bytes
     #value
 
-    static validBytesLength
+    #consumedBytes
+    #unconsumedBytes
+
+    static minBytesLength
 
     static serialize(value, instance) {
 
@@ -13,25 +16,16 @@ class TypeDef {
 
     }
 
-    static isValueInput(input) {
-        return input instanceof Object
-    }
+    static isValueInput(input) { return input instanceof Object }
 
-    static isValidBytesInput(bytes) {
-        switch (this.validBytesLength) {
-            case undefined:
-                return true
-            case true:
-                return bytes.length % 4 === 0
-            default:
-                return Number.isInteger(this.validBytesLength) ? bytes.length === this.validBytesLength : false
-        }
+    static isMinBytesInput(bytes) {
+        return Number.isInteger(this.constructor.minBytesLength) ? (bytes.length >= this.constructor.minBytesLength) : true
     }
 
     constructor(input) {
         if (!(input instanceof Uint8Array) && Array.isArray(input)) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
-            if (!this.constructor.isValidBytesInput(input)) throw new Error(`Invalid byte length for ${this.constructor.name}: ${input.length}`)
+            [this.#consumedBytes, this.#unconsumedBytes] = this.#consume(input)
             const paddedLength = Math.ceil(input.length / 4) * 4
             this.#bytes = new Uint8Array(paddedLength)
             this.#bytes.set(input)
@@ -40,19 +34,20 @@ class TypeDef {
         }
     }
 
-    get bytes() {
-        this.#bytes ??= this.constructor.serialize.bind(this)(this.#value)
-        return this.#bytes
+    consume(bytes) {
+        let cursor = 0
+        return [new Uint8Array(cursor), bytes.subarray(cursor)]
     }
 
-    get value() {
-        this.#value ??= this.constructor.deserialize.bind(this)(this.#bytes)
-        return this.#value
-    }
+    get bytes() { return this.#bytes ??= this.constructor.serialize.bind(this)(this.#value) }
 
-    toJSON() {
-        return this.value ? this.value : null
-    }
+    get consumedBytes() { return this.#consumedBytes }
+
+    get unconsumedBytes() { return this.#unconsumedBytes }
+
+    get value() { return this.#value ??= this.constructor.deserialize.bind(this)(this.#bytes) }
+
+    toJSON() { return this.value ? this.value : null }
 
     toString() {
         try {
@@ -62,8 +57,11 @@ class TypeDef {
         }
     }
 
-    valueOf() {
-        return this.value
+    valueOf() { return this.value }
+
+    #consume(bytes) {
+        if (!this.constructor.isMinBytesInput(bytes)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
+        return this.consume(bytes)
     }
 
 }
@@ -458,7 +456,9 @@ export function X(xCode) {
         structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())]))
     }, null, 4))
 
-    return class extends TypeDef {
+    const typeClass = class extends TypeDef {
+
+        static types = {}
 
         static serialize(value) {
             // takes a value and returns a Uint8Array
@@ -475,6 +475,10 @@ export function X(xCode) {
         }
 
     }
+
+
+
+    return typeClass
 
 }
 
