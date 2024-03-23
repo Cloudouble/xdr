@@ -215,36 +215,39 @@ class opaqueType extends TypeDef {
 class stringType extends opaqueType {
 
     #length
+    #variableLength
 
     static isValueInput(input) { return typeof input === 'string' }
 
     static serialize(value) {
-        const mode = this.mode, bytesLength = Math.ceil(this.length / 4) * 4, bytes = new Uint8Array(bytesLength)
-        const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-        view.setUint32(0, this.length, false)
+        const stringBytes = (new TextEncoder()).encode(value),
+            bytes = new Uint8Array(4 + (Math.ceil(stringBytes.length / 4) * 4)), buffer = new ArrayBuffer(4), view = new DataView(buffer)
+        view.setUint32(0, stringBytes.length, false)
         bytes.set(new Uint8Array(buffer))
-        bytes.set((new TextEncoder()).encode(value), 4)
+        bytes.set(stringBytes, 4)
         return bytes
     }
 
-    static deserialize(bytes) { return String.fromCharCode(...bytes.subarray(4)) }
+    static deserialize(bytes) { return (new TextDecoder()).decode(bytes.subarray(4)) }
 
     constructor(input, length) {
         super(input, length)
         this.#length = length
+        if (this.isValueInput(input)) this.#variableLength = (new TextEncoder()).encode(value).length
     }
 
     consume(bytes, length) {
         const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-        this.#length = view.getUint32(0, false)
-        if (length && (this.#length > length)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${bytes.length}`)
-        let consumeLength = Math.ceil(length / 4) * 4
+        this.#variableLength = view.getUint32(0, false)
+        if (length && (this.#variableLength > length)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${this.#variableLength}`)
+        let consumeLength = Math.ceil(this.#variableLength / 4) * 4
         if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
         return bytes.subarray(0, 4 + consumeLength)
-
     }
 
     get length() { return this.#length }
+
+    get variableLength() { return this.#variableLength }
 
 }
 
