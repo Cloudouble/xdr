@@ -100,9 +100,7 @@ class enumType extends intType {
 
 class boolType extends enumType {
 
-    constructor(input) {
-        super(!!input, [false, true])
-    }
+    constructor(input) { super(!!input, [false, true]) }
 
 }
 
@@ -144,10 +142,7 @@ class floatType extends TypeDef {
         return new Uint8Array(view.buffer)
     }
 
-    static deserialize(bytes) {
-        const view = this.getView(bytes)
-        return view.getFloat32(0, false)
-    }
+    static deserialize(bytes) { return this.getView(bytes).getFloat32(0, false) }
 
 }
 
@@ -163,10 +158,7 @@ class doubleType extends TypeDef {
         return new Uint8Array(buffer)
     }
 
-    static deserialize(bytes) {
-        const view = this.getView(bytes)
-        return view.getFloat64(0, false)
-    }
+    static deserialize(bytes) { return this.getView(bytes).getFloat64(0, false) }
 
 }
 
@@ -265,31 +257,18 @@ class stringType extends opaqueType {
 
 class voidType extends TypeDef {
 
-    static isValueInput(input) {
-        return input == null
-    }
+    static isValueInput(input) { return input == null }
 
-    static serialize(value) {
-        return new Uint8Array(0)
-    }
+    static serialize(value) { return new Uint8Array(0) }
 
-    static deserialize(bytes) {
-        return null
-    }
+    static deserialize(bytes) { return null }
 
 }
 
 const XDR = {
     typedef: TypeDef,
-    int: intType,
-    enum: enumType,
-    bool: boolType,
-    hyper: hyperType,
-    float: floatType,
-    double: doubleType,
-    opaque: opaqueType,
-    string: stringType,
-    void: voidType
+    int: intType, enum: enumType, bool: boolType, hyper: hyperType, float: floatType, double: doubleType,
+    opaque: opaqueType, string: stringType, void: voidType
 }
 
 export default XDR
@@ -300,10 +279,7 @@ const rx = {
     struct: /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     union: /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g,
-    unsigned: /^unsigned\s+/,
-    space: /\s+/,
-    comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
-    blankLines: /^\s*[\r\n]/gm
+    unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
 }
 
 const parseTypeLengthModeIdentifier = function (declaration, constants) {
@@ -442,7 +418,7 @@ export function X(xCode) {
     }
     if (!entry) throw new Error('no entry found')
 
-    console.log('line 456', JSON.stringify({
+    console.log('line 421', JSON.stringify({
         entry, constants, enums, typedefs, unions,
         structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())]))
     }, null, 4))
