@@ -167,15 +167,13 @@ class opaqueType extends TypeDef {
     static isValueInput(input) { return Array.isArray(input) }
 
     static serialize(value) {
-        const mode = this.mode, isVariableMode = mode === 'variable'
-        const paddedLength = Math.ceil((isVariableMode ? value.length : this.length) / 4) * 4
-        const bytes = new Uint8Array(isVariableMode ? (4 + paddedLength) : paddedLength)
-        if (isVariableMode) {
+        const mode = this.mode, bytesLength = Math.ceil((mode === 'fixed' ? this.length : this.variableLength) / 4) * 4, bytes = new Uint8Array(bytesLength)
+        if (mode === 'variable') {
             const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-            view.setUint32(0, value.length, false)
+            view.setUint32(0, this.variableLength, false)
             bytes.set(new Uint8Array(buffer))
         }
-        bytes.set(input, variable ? 4 : 0)
+        bytes.set(value, mode === 'fixed' ? 0 : 4)
         return bytes
     }
 
@@ -189,17 +187,20 @@ class opaqueType extends TypeDef {
     }
 
     consume(bytes, mode, length) {
+        let consumeLength
         switch (mode) {
             case 'fixed':
                 length ??= 0
-                if (bytes.length < length) throw new Error(`Insufficient consumable byte length for fixed length ${this.constructor.name}: ${bytes.length}`)
-                return bytes.subarray(0, length)
+                consumeLength = Math.ceil(length / 4) * 4
+                if (bytes.length < consumeLength) throw new Error(`Insufficient consumable byte length for fixed length ${this.constructor.name}: ${bytes.length}`)
+                return bytes.subarray(0, consumeLength)
             case 'variable':
                 const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
                 this.#variableLength = view.getUint32(0, false)
                 if (length && (this.#variableLength > length)) throw new Error(`Maximum variable length exceeded for ${this.constructor.name}: ${bytes.length}`)
-                if (bytes.length < (4 + this.#variableLength)) throw new Error(`Insufficient consumable byte length for variable length ${this.constructor.name}: ${bytes.length}`)
-                return bytes.subarray(0, 4 + this.#variableLength)
+                consumeLength = Math.ceil(length / 4) * 4
+                if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for variable length ${this.constructor.name}: ${bytes.length}`)
+                return bytes.subarray(0, 4 + consumeLength)
         }
     }
 
