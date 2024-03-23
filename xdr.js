@@ -68,7 +68,7 @@ class intType extends TypeDef {
 
     constructor(input, unsigned) {
         super(input)
-        this.unsigned = this.constructor.isValueInput ? input >= 0 : !!unsigned
+        this.unsigned = this.constructor.isValueInput(input) ? input >= 0 : !!unsigned
     }
 
 }
@@ -212,39 +212,39 @@ class opaqueType extends TypeDef {
 
 }
 
-class stringType extends TypeDef {
-
-    static validBytesLength = true
+class stringType extends opaqueType {
 
     #length
 
-    static isValueInput(input) {
-        return typeof input === 'string'
-    }
+    static isValueInput(input) { return typeof input === 'string' }
 
     static serialize(value) {
-        const paddedLength = Math.ceil(value.length / 4) * 4
-        const bytes = new Uint8Array(4 + paddedLength)
+        const mode = this.mode, bytesLength = Math.ceil(this.length / 4) * 4, bytes = new Uint8Array(bytesLength)
         const buffer = new ArrayBuffer(4), view = new DataView(buffer)
-        view.setUint32(0, value.length, false)
+        view.setUint32(0, this.length, false)
         bytes.set(new Uint8Array(buffer))
         bytes.set((new TextEncoder()).encode(value), 4)
         return bytes
     }
 
-    static deserialize(bytes) {
-        const view = new DataView(bytes.buffer), stringLength = view.getUint32(0, false)
-        return String.fromCharCode(...(new Uint8Array(bytes.buffer, 4, stringLength)))
-    }
+    static deserialize(bytes) { return String.fromCharCode(...bytes.subarray(4)) }
 
     constructor(input, length) {
-        super(input)
-        if (length && this.value && (this.value.length > length)) throw new Error(`string type must have maximum byte length of ${length}`)
+        super(input, length)
+        this.#length = length
     }
 
-    get length() {
-        return this.#length
+    consume(bytes, length) {
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+        this.#length = view.getUint32(0, false)
+        if (length && (this.#length > length)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${bytes.length}`)
+        let consumeLength = Math.ceil(length / 4) * 4
+        if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
+        return bytes.subarray(0, 4 + consumeLength)
+
     }
+
+    get length() { return this.#length }
 
 }
 
@@ -451,8 +451,6 @@ export function X(xCode) {
         }
 
     }
-
-
 
     return typeClass
 
