@@ -5,13 +5,18 @@ class TypeDef {
 
     static minBytesLength = 0
 
-    static serialize(value, instance) { return new Uint8Array() }
+    static serialize(value) { return new Uint8Array() }
 
-    static deserialize(bytes, instance) { return }
+    static deserialize(bytes) { return }
 
-    static isValueInput(input) { return input instanceof Object }
+    static getView(i) {
+        if (typeof i === 'number') return new DataView(new ArrayBuffer(i))
+        if (i instanceof Uint8Array) return new DataView(i.buffer, i.byteOffset, i.byteLength)
+    }
 
-    static isMinBytesInput(bytes) { return Number.isInteger(this.constructor.minBytesLength) ? (bytes.length >= this.constructor.minBytesLength) : true }
+    static isValueInput(input) { return !(input instanceof Uint8Array) }
+
+    static isMinBytesInput(bytes) { return Number.isInteger(this.minBytesLength) ? (bytes.length >= this.minBytesLength) : true }
 
     constructor(input, ...consumeArgs) {
         if (!(input instanceof Uint8Array) && Array.isArray(input) && input.every(i => Number.isInteger(i) && (i >= 0) && (i <= 255))) input = new Uint8Array(input)
@@ -56,13 +61,13 @@ class intType extends TypeDef {
     static isValueInput(input) { return Number.isInteger(input) }
 
     static serialize(value) {
-        const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+        const view = this.getView(4)
         this.unsigned ? view.setUint32(0, value, false) : view.setInt32(0, value, false)
-        return new Uint8Array(buffer)
+        return new Uint8Array(view.buffer)
     }
 
     static deserialize(bytes) {
-        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+        const view = this.getView(bytes)
         return this.unsigned ? view.getUint32(0, false) : view.getInt32(0, false)
     }
 
@@ -74,8 +79,10 @@ class intType extends TypeDef {
 }
 
 class enumType extends intType {
+
     #body
     #identifier
+
     constructor(input, body) {
         super(input, true)
         if (!body || !Array.isArray(body) || !body.length || !body.every(i => typeof i === 'string')) throw new Error('enum must have a body array of string identifiers')
@@ -84,14 +91,19 @@ class enumType extends intType {
         if (body[value] === undefined) throw new Error(`no enum identifier found with value ${value}`)
         this.#identifier = body[value]
     }
+
     get identifier() { return this.#identifier }
+
     get body() { return this.#body }
+
 }
 
 class boolType extends enumType {
+
     constructor(input) {
         super(!!input, [false, true])
     }
+
 }
 
 class hyperType extends TypeDef {
@@ -101,13 +113,13 @@ class hyperType extends TypeDef {
     static isValueInput(input) { return typeof input === 'bigint' }
 
     static serialize(value) {
-        const buffer = new ArrayBuffer(8), view = new DataView(buffer)
+        const view = this.getView(8)
         view.setBigUint64(0, BigInt.asUintN(64, value), false)
-        return new Uint8Array(buffer)
+        return new Uint8Array(view.buffer)
     }
 
     static deserialize(bytes) {
-        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+        const view = this.getView(bytes)
         return this.unsigned ? view.getBigUint64(0, false) : view.getBigInt64(0, false)
     }
 
@@ -127,13 +139,13 @@ class floatType extends TypeDef {
     static isValueInput(input) { return typeof input === 'number' }
 
     static serialize(value) {
-        const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+        const view = this.getView(4)
         view.setFloat32(0, value, false)
-        return new Uint8Array(buffer)
+        return new Uint8Array(view.buffer)
     }
 
     static deserialize(bytes) {
-        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+        const view = this.getView(bytes)
         return view.getFloat32(0, false)
     }
 
@@ -146,13 +158,13 @@ class doubleType extends TypeDef {
     static isValueInput(input) { return typeof input === 'number' }
 
     static serialize(value) {
-        const buffer = new ArrayBuffer(8), view = new DataView(buffer)
+        const view = this.getView(8)
         view.setFloat64(0, value, false)
         return new Uint8Array(buffer)
     }
 
     static deserialize(bytes) {
-        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+        const view = this.getView(bytes)
         return view.getFloat64(0, false)
     }
 
@@ -169,9 +181,9 @@ class opaqueType extends TypeDef {
     static serialize(value) {
         const mode = this.mode, bytesLength = Math.ceil((mode === 'fixed' ? this.length : this.variableLength) / 4) * 4, bytes = new Uint8Array(bytesLength)
         if (mode === 'variable') {
-            const buffer = new ArrayBuffer(4), view = new DataView(buffer)
+            const view = this.getView(4)
             view.setUint32(0, this.variableLength, false)
-            bytes.set(new Uint8Array(buffer))
+            bytes.set(new Uint8Array(view.buffer))
         }
         bytes.set(value, mode === 'fixed' ? 0 : 4)
         return bytes
@@ -195,7 +207,7 @@ class opaqueType extends TypeDef {
                 if (bytes.length < consumeLength) throw new Error(`Insufficient consumable byte length for fixed length ${this.constructor.name}: ${bytes.length}`)
                 return bytes.subarray(0, consumeLength)
             case 'variable':
-                const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+                const view = this.getView(bytes)
                 this.#variableLength = view.getUint32(0, false)
                 if (length && (this.#variableLength > length)) throw new Error(`Maximum variable length exceeded for ${this.constructor.name}: ${bytes.length}`)
                 consumeLength = Math.ceil(length / 4) * 4
@@ -221,9 +233,9 @@ class stringType extends opaqueType {
 
     static serialize(value) {
         const stringBytes = (new TextEncoder()).encode(value),
-            bytes = new Uint8Array(4 + (Math.ceil(stringBytes.length / 4) * 4)), buffer = new ArrayBuffer(4), view = new DataView(buffer)
+            bytes = new Uint8Array(4 + (Math.ceil(stringBytes.length / 4) * 4)), view = this.getView(4)
         view.setUint32(0, stringBytes.length, false)
-        bytes.set(new Uint8Array(buffer))
+        bytes.set(new Uint8Array(view.buffer))
         bytes.set(stringBytes, 4)
         return bytes
     }
@@ -237,7 +249,7 @@ class stringType extends opaqueType {
     }
 
     consume(bytes, length) {
-        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+        const view = this.getView(bytes)
         this.#variableLength = view.getUint32(0, false)
         if (length && (this.#variableLength > length)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${this.#variableLength}`)
         let consumeLength = Math.ceil(this.#variableLength / 4) * 4
