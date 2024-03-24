@@ -208,10 +208,9 @@ class opaqueType extends TypeDef {
 
 }
 
-class stringType extends opaqueType {
+class stringType extends TypeDef {
 
     #maxLength
-    #stringLength
 
     static isValueInput(input) { return typeof input === 'string' }
 
@@ -229,20 +228,17 @@ class stringType extends opaqueType {
     constructor(input, maxLength) {
         super(input, length)
         this.#maxLength = maxLength
-        if (this.isValueInput(input)) this.#stringLength = (new TextEncoder()).encode(value).length
     }
 
     consume(bytes, maxLength) {
-        this.#stringLength = this.getView(bytes).getUint32(0, false)
-        if (maxLength && (this.#stringLength > maxLength)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${this.#stringLength}`)
-        let consumeLength = Math.ceil(this.#stringLength / 4) * 4
+        const stringLength = this.getView(bytes).getUint32(0, false)
+        if (maxLength && (stringLength > maxLength)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${stringLength}`)
+        let consumeLength = Math.ceil(stringLength / 4) * 4
         if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
         return bytes.subarray(0, 4 + consumeLength)
     }
 
     get maxLength() { return this.#maxLength }
-
-    get stringLength() { return this.#stringLength }
 
 }
 
