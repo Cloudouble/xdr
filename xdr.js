@@ -288,15 +288,13 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
     const identifierIndexOfLt = identifier.indexOf('<'), identifierIndexOfGt = identifier.indexOf('>'),
         identifierIndexOfBracketStart = identifier.indexOf('['), identifierIndexOfBracketEnd = identifier.indexOf(']')
     if ((identifierIndexOfLt > 0) && (identifierIndexOfLt < identifierIndexOfGt)) {
-        length = identifier.slice(identifierIndexOfLt + 1, identifierIndexOfGt)
-        length = parseInt(length) || constants[length] || undefined
-        mode = 'variable'
+        length = parseInt(identifier.slice(identifierIndexOfLt + 1, identifierIndexOfGt)) || constants[length] || undefined
         identifier = identifier.slice(0, identifierIndexOfLt)
+        mode = 'variable'
     } else if ((identifierIndexOfBracketStart > 0) && (identifierIndexOfBracketStart < identifierIndexOfBracketEnd)) {
-        length = identifier.slice(identifierIndexOfBracketStart + 1, identifierIndexOfBracketEnd)
-        length = parseInt(length) || constants[length] || undefined
-        mode = 'fixed'
+        length = parseInt(identifier.slice(identifierIndexOfBracketStart + 1, identifierIndexOfBracketEnd)) || constants[length] || undefined
         identifier = identifier.slice(0, identifierIndexOfBracketStart)
+        mode = 'fixed'
     }
     return { type, length, mode, identifier, optional, unsigned }
 }
@@ -304,7 +302,7 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
 export function X(xCode) {
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
-    const lines = [], constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
+    const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
 
     for (const m of xCode.matchAll(rx.const)) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
@@ -321,7 +319,7 @@ export function X(xCode) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', enumName = isTypeDef ? m[4] : m[1],
             enumBody = isTypeDef ? m[3] : m[2], body = []
         for (const condition of enumBody.split(',')) {
-            let [name, value] = condition.split('=').map(part => part.trim())
+            let [name, value] = condition.split('=').map(s => s.trim())
             if (!name || !value) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
             value = parseInt(value, value[0] === '0' && value[1] !== '.' && value[1] !== 'x' ? 8 : undefined)
             if (!Number.isInteger(value)) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
@@ -332,14 +330,11 @@ export function X(xCode) {
     }
 
     const buildStructFromMatch = function (m) {
-        const isTypeDef = m[0].slice(0, 8) === 'typedef '
-        const structName = isTypeDef ? m[4] : m[1], map = new Map()
-        const structBody = isTypeDef ? m[3] : m[2]
+        const isTypeDef = m[0].slice(0, 8) === 'typedef ', structName = isTypeDef ? m[4] : m[1], map = new Map(), structBody = isTypeDef ? m[3] : m[2]
         for (let declaration of structBody.split('\n')) {
             declaration = declaration.trim()
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
-            if (!declaration) continue
-            if (declaration[0] === ';') continue
+            if ((!declaration) || (declaration[0] === ';')) continue
             const { type, length, mode, identifier, optional, unsigned } = parseTypeLengthModeIdentifier(declaration, constants)
             if (!type || !identifier) throw new Error(`struct ${structName} has invalid declaration: ${declaration};`)
             map.set(identifier, { type, length, mode, optional, unsigned })
@@ -348,19 +343,14 @@ export function X(xCode) {
     }
 
     const buildUnionFromMatch = function (m) {
-        const isTypeDef = m[0].slice(0, 8) === 'typedef ', unionName = isTypeDef ? m[6] : m[1], discriminantDeclaration = isTypeDef ? m[4] : m[2], arms = {}
-        const [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim())
-        const discriminant = { type: discriminantType, value: discriminantValue }
-        const unionBody = isTypeDef ? m[5] : m[3]
-        const queuedArms = []
+        const isTypeDef = m[0].slice(0, 8) === 'typedef ', unionName = isTypeDef ? m[6] : m[1], discriminantDeclaration = isTypeDef ? m[4] : m[2],
+            [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim()), arms = {},
+            discriminant = { type: discriminantType, value: discriminantValue }, unionBody = isTypeDef ? m[5] : m[3], queuedArms = []
         for (let caseSpec of unionBody.split('case ')) {
             caseSpec = caseSpec.trim()
             if (!caseSpec) continue
-            let [discriminantValue, armDeclaration] = caseSpec.split(':').map(part => part.trim())
-            if (!armDeclaration) {
-                queuedArms.push(discriminantValue)
-                continue
-            }
+            let [discriminantValue, armDeclaration] = caseSpec.split(':').map(s => s.trim())
+            if (!armDeclaration) { queuedArms.push(discriminantValue); continue }
             if (armDeclaration[armDeclaration.length - 1] === ';') armDeclaration = armDeclaration.slice(0, -1).trim()
             switch (armDeclaration.split(rx.space)[0]) {
                 case 'struct':
@@ -410,7 +400,7 @@ export function X(xCode) {
     }
     if (!entry) throw new Error('no entry found')
 
-    console.log('line 421', JSON.stringify({
+    console.log('line 403', JSON.stringify({
         entry, constants, enums, typedefs, unions,
         structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())]))
     }, null, 4))
