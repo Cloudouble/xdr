@@ -9,9 +9,9 @@ class TypeDef {
 
     static deserialize(bytes) { return }
 
-    static getView(i) {
+    static getView(i, byteOffset, byteLength) {
         if (typeof i === 'number') return new DataView(new ArrayBuffer(i))
-        if (i instanceof Uint8Array) return new DataView(i.buffer, i.byteOffset, i.byteLength)
+        if (i instanceof Uint8Array) return new DataView(i.buffer, i.byteOffset + (byteOffset ?? 0), byteLength ?? i.byteLength)
     }
 
     static isValueInput(input) { return input && !(input instanceof Uint8Array) && (input instanceof Object) }
@@ -21,7 +21,9 @@ class TypeDef {
     constructor(input, ...consumeArgs) {
         if (!(input instanceof Uint8Array) && Array.isArray(input) && input.every(i => Number.isInteger(i) && (i >= 0) && (i <= 255))) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
-            this.#bytes = this.#consume(input, ...consumeArgs)
+            const consumeResult = this.#consume(input, ...consumeArgs), isConsumeResultArray = Array.isArray(consumeResult)
+            this.#bytes = isConsumeResultArray ? consumeResult[0] : consumeResult
+            if (isConsumeResultArray && consumeResult.length > 1) this.#value = consumeResult[1]
         } else if (this.constructor.isValueInput(input)) {
             this.#value = input
         } else {
@@ -31,9 +33,9 @@ class TypeDef {
 
     consume(bytes) { return bytes.subarray(0, this.constructor.minBytesLength) }
 
-    get bytes() { return this.#bytes ??= this.constructor.serialize(this.#value) }
+    get bytes() { return this.#bytes ??= this.constructor.serialize(this.#value, this) }
 
-    get value() { return this.#value ??= this.constructor.deserialize(this.#bytes) }
+    get value() { return this.#value ??= this.constructor.deserialize(this.#bytes, this) }
 
     toJSON() { return this.value ? this.value : null }
 
@@ -166,48 +168,43 @@ class doubleType extends TypeDef {
 
 class opaqueType extends TypeDef {
 
-    #variableLength
-    #length
-    #mode
-
     static isValueInput(input) { return Array.isArray(input) }
 
-    static serialize(value) {
-        const mode = this.mode, bytesLength = Math.ceil((mode === 'fixed' ? this.length : this.variableLength) / 4) * 4, bytes = new Uint8Array(bytesLength)
+    static serialize(value, instance, mode, length) {
+        mode ??= instance.mode
+        length ??= instance.length
+        const bytesLength = Math.ceil((mode === 'fixed' ? length : (4 + value.length)) / 4) * 4, bytes = new Uint8Array(bytesLength)
         if (mode === 'variable') {
             const view = this.getView(4)
-            view.setUint32(0, this.variableLength, false)
+            view.setUint32(0, value.length, false)
             bytes.set(new Uint8Array(view.buffer))
         }
         bytes.set(value, mode === 'fixed' ? 0 : 4)
         return bytes
     }
 
-    static deserialize(bytes) { return this.mode === 'fixed' ? Array.from(bytes) : Array.from(bytes.subarray(4)) }
+    static deserialize(bytes, instance) { return instance.mode === 'fixed' ? Array.from(bytes) : Array.from(bytes.subarray(4)) }
 
     constructor(input, mode, length) {
         if (mode !== 'variable') mode = 'fixed'
-        super(input, mode, length)
-        this.#length = length
-        this.#mode = mode
+        length ??= input.length
+        super(input, mode, length, Array.isArray(input))
+        Object.defineProperties(this, {
+            length: { value: length, enumerable: true },
+            mode: { value: mode, enumerable: true }
+        })
     }
 
-    consume(bytes, mode, length) {
-        length ??= 0
+    consume(bytes, mode, length, isValueInput) {
+        if (isValueInput) return [this.constructor.serialize(bytes, this, mode, length), Array.from(bytes)]
         let consumeLength = Math.ceil(length / 4) * 4, cursor = mode === 'variable' ? (4 + consumeLength) : consumeLength
-        if (bytes.length < cursor) throw new Error(`Insufficient consumable byte length for ${mode} length ${this.constructor.name}: ${bytes.length}`)
+        if (bytes.length > cursor) throw new Error(`Insufficient consumable byte length for ${mode} length ${this.constructor.name}: ${bytes.length}`)
         if (mode === 'variable') {
-            this.#variableLength = this.getView(bytes).getUint32(0, false)
-            if (length && (this.#variableLength > length)) throw new Error(`Maximum variable length exceeded for ${this.constructor.name}: ${bytes.length}`)
+            const valueLength = this.constructor.getView(bytes, 0, 4).getUint32(0, false)
+            if (length && (valueLength > length)) throw new Error(`Maximum variable value length exceeded for ${this.constructor.name}: ${bytes.length}`)
         }
         return bytes.subarray(0, cursor)
     }
-
-    get length() { return this.#length }
-
-    get mode() { return this.#mode }
-
-    get variableLength() { return this.#variableLength }
 
 }
 
