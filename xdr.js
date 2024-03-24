@@ -211,14 +211,14 @@ class opaqueType extends TypeDef {
 
 class stringType extends opaqueType {
 
-    #length
-    #variableLength
+    #maxLength
+    #stringLength
 
     static isValueInput(input) { return typeof input === 'string' }
 
     static serialize(value) {
-        const stringBytes = (new TextEncoder()).encode(value),
-            bytes = new Uint8Array(4 + (Math.ceil(stringBytes.length / 4) * 4)), view = this.getView(4)
+        const stringBytes = (new TextEncoder()).encode(value), view = this.getView(4),
+            bytes = new Uint8Array(4 + (Math.ceil(stringBytes.length / 4) * 4))
         view.setUint32(0, stringBytes.length, false)
         bytes.set(new Uint8Array(view.buffer))
         bytes.set(stringBytes, 4)
@@ -227,24 +227,23 @@ class stringType extends opaqueType {
 
     static deserialize(bytes) { return (new TextDecoder()).decode(bytes.subarray(4)) }
 
-    constructor(input, length) {
+    constructor(input, maxLength) {
         super(input, length)
-        this.#length = length
-        if (this.isValueInput(input)) this.#variableLength = (new TextEncoder()).encode(value).length
+        this.#maxLength = maxLength
+        if (this.isValueInput(input)) this.#stringLength = (new TextEncoder()).encode(value).length
     }
 
-    consume(bytes, length) {
-        const view = this.getView(bytes)
-        this.#variableLength = view.getUint32(0, false)
-        if (length && (this.#variableLength > length)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${this.#variableLength}`)
-        let consumeLength = Math.ceil(this.#variableLength / 4) * 4
+    consume(bytes, maxLength) {
+        this.#stringLength = this.getView(bytes).getUint32(0, false)
+        if (maxLength && (this.#stringLength > maxLength)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${this.#stringLength}`)
+        let consumeLength = Math.ceil(this.#stringLength / 4) * 4
         if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
         return bytes.subarray(0, 4 + consumeLength)
     }
 
-    get length() { return this.#length }
+    get maxLength() { return this.#maxLength }
 
-    get variableLength() { return this.#variableLength }
+    get stringLength() { return this.#stringLength }
 
 }
 
@@ -252,9 +251,9 @@ class voidType extends TypeDef {
 
     static isValueInput(input) { return input == null }
 
-    static serialize(value) { return new Uint8Array(0) }
+    static serialize() { return new Uint8Array(0) }
 
-    static deserialize(bytes) { return null }
+    static deserialize() { return null }
 
 }
 
