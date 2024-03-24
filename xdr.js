@@ -61,13 +61,13 @@ class intType extends TypeDef {
     static isValueInput(input) { return Number.isInteger(input) }
 
     static serialize(value) {
-        const view = this.getView(4)
+        const view = this.constructor.getView(4)
         this.unsigned ? view.setUint32(0, value, false) : view.setInt32(0, value, false)
         return new Uint8Array(view.buffer)
     }
 
     static deserialize(bytes) {
-        const view = this.getView(bytes)
+        const view = this.constructor.getView(bytes)
         return this.unsigned ? view.getUint32(0, false) : view.getInt32(0, false)
     }
 
@@ -78,31 +78,33 @@ class intType extends TypeDef {
 
 }
 
-class enumType extends intType {
+function enumFactory(body) {
+    if (!body || !Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
+    return class extends intType {
 
-    #body
-    #identifier
+        #body = body
+        #identifier
 
-    constructor(input, body) {
-        super(input, true)
-        if (!body || !Array.isArray(body) || !body.length || !body.every(i => typeof i === 'string')) throw new Error('enum must have a body array of string identifiers')
-        this.#body = [...body]
-        const value = this.value
-        if (body[value] === undefined) throw new Error(`no enum identifier found with value ${value}`)
-        this.#identifier = body[value]
+        constructor(input) {
+            const originalInput = input
+            switch (typeof input) {
+                case 'boolean': case 'string':
+                    input = body.indexOf(input)
+            }
+            super(input, true)
+            const value = this.value
+            if (this.#body[value] === undefined) throw new Error(`no enum identifier found for ${typeof originalInput} ${originalInput}`)
+            this.#identifier = this.#body[value]
+        }
+
+        get identifier() { return this.#identifier }
+
+        get body() { return this.#body }
+
     }
-
-    get identifier() { return this.#identifier }
-
-    get body() { return this.#body }
-
 }
 
-class boolType extends enumType {
-
-    constructor(input) { super(!!input, [false, true]) }
-
-}
+const boolType = enumFactory([false, true])
 
 class hyperType extends TypeDef {
 
@@ -155,7 +157,7 @@ class doubleType extends TypeDef {
     static serialize(value) {
         const view = this.getView(8)
         view.setFloat64(0, value, false)
-        return new Uint8Array(buffer)
+        return new Uint8Array(view.buffer)
     }
 
     static deserialize(bytes) { return this.getView(bytes).getFloat64(0, false) }
@@ -258,8 +260,9 @@ class voidType extends TypeDef {
 }
 
 const XDR = {
+    enumFactory,
     typedef: TypeDef,
-    int: intType, enum: enumType, bool: boolType, hyper: hyperType, float: floatType, double: doubleType,
+    int: intType, bool: boolType, hyper: hyperType, float: floatType, double: doubleType,
     opaque: opaqueType, string: stringType, void: voidType
 }
 
@@ -400,12 +403,17 @@ export function X(xCode) {
     }
     if (!entry) throw new Error('no entry found')
 
-    console.log('line 403', JSON.stringify({
-        entry, constants, enums, typedefs, unions,
-        structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())]))
-    }, null, 4))
+    const outline = { entry, constants, enums, typedefs, unions, structs }
+
+    console.log('line 405', JSON.stringify(
+        {
+            outline,
+            ...{ structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])) }
+        }, null, 4))
 
     const typeClass = class extends TypeDef {
+
+        static #outline = outline
 
         static serialize(value) {
             const bytes = new Uint8Array()
@@ -413,7 +421,7 @@ export function X(xCode) {
             return bytes
         }
 
-        static deserialize(bytes) {
+        static deserialize(bytes, dry) {
             const value = {}
 
             return value

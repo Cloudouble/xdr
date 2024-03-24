@@ -45,11 +45,11 @@
             string filename<MAXNAMELEN>; /* name of file    */
             filetype type;               /* info about file */
             string owner<MAXUSERNAME>;   /* owner of file   */
-            opaque *data<MAXFILELEN>;     /* file data       */
+            opaque data<MAXFILELEN>;     /* file data       */
          };
 `
 
-        const testValue = new Uint8Array([
+        const testBytes = new Uint8Array([
             0x00, 0x00, 0x00, 0x09,
             0x73, 0x69, 0x6c, 0x6c,
             0x79, 0x70, 0x72, 0x6f,
@@ -64,9 +64,17 @@
             0x74, 0x29, 0x00, 0x00
         ])
 
+        const testValue = {
+            filename: "sillyprog",
+            type: "EXEC",
+            interpretor: "lisp",
+            owner: "john",
+            data: [0x28, 0x71, 0x75, 0x69, 0x74, 0x29]
+        }
+
         console.log('line 67', XDR)
 
-        console.log('line 69', testValue)
+        console.log('line 69', testBytes)
 
         const customType = X(xCode)
         console.log('line 72', customType)
