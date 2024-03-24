@@ -31,9 +31,9 @@ class TypeDef {
 
     consume(bytes) { return bytes.subarray(0, this.constructor.minBytesLength) }
 
-    get bytes() { return this.#bytes ??= this.constructor.serialize.bind(this)(this.#value) }
+    get bytes() { return this.#bytes ??= this.constructor.serialize(this.#value) }
 
-    get value() { return this.#value ??= this.constructor.deserialize.bind(this)(this.#bytes) }
+    get value() { return this.#value ??= this.constructor.deserialize(this.#bytes) }
 
     toJSON() { return this.value ? this.value : null }
 
@@ -61,13 +61,13 @@ class intType extends TypeDef {
     static isValueInput(input) { return Number.isInteger(input) }
 
     static serialize(value) {
-        const view = this.constructor.getView(4)
+        const view = this.getView(4)
         this.unsigned ? view.setUint32(0, value, false) : view.setInt32(0, value, false)
         return new Uint8Array(view.buffer)
     }
 
     static deserialize(bytes) {
-        const view = this.constructor.getView(bytes)
+        const view = this.getView(bytes)
         return this.unsigned ? view.getUint32(0, false) : view.getInt32(0, false)
     }
 
