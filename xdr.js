@@ -191,21 +191,14 @@ class opaqueType extends TypeDef {
     }
 
     consume(bytes, mode, length) {
-        let consumeLength
-        switch (mode) {
-            case 'fixed':
-                length ??= 0
-                consumeLength = Math.ceil(length / 4) * 4
-                if (bytes.length < consumeLength) throw new Error(`Insufficient consumable byte length for fixed length ${this.constructor.name}: ${bytes.length}`)
-                return bytes.subarray(0, consumeLength)
-            case 'variable':
-                const view = this.getView(bytes)
-                this.#variableLength = view.getUint32(0, false)
-                if (length && (this.#variableLength > length)) throw new Error(`Maximum variable length exceeded for ${this.constructor.name}: ${bytes.length}`)
-                consumeLength = Math.ceil(length / 4) * 4
-                if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for variable length ${this.constructor.name}: ${bytes.length}`)
-                return bytes.subarray(0, 4 + consumeLength)
+        length ??= 0
+        let consumeLength = Math.ceil(length / 4) * 4, cursor = mode === 'variable' ? (4 + consumeLength) : consumeLength
+        if (bytes.length < cursor) throw new Error(`Insufficient consumable byte length for ${mode} length ${this.constructor.name}: ${bytes.length}`)
+        if (mode === 'variable') {
+            this.#variableLength = this.getView(bytes).getUint32(0, false)
+            if (length && (this.#variableLength > length)) throw new Error(`Maximum variable length exceeded for ${this.constructor.name}: ${bytes.length}`)
         }
+        return bytes.subarray(0, cursor)
     }
 
     get length() { return this.#length }
