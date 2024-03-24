@@ -14,7 +14,7 @@ class TypeDef {
         if (i instanceof Uint8Array) return new DataView(i.buffer, i.byteOffset, i.byteLength)
     }
 
-    static isValueInput(input) { return !(input instanceof Uint8Array) }
+    static isValueInput(input) { return input && !(input instanceof Uint8Array) && (input instanceof Object) }
 
     static isMinBytesInput(bytes) { return Number.isInteger(this.minBytesLength) ? (bytes.length >= this.minBytesLength) : true }
 
@@ -425,20 +425,20 @@ export function X(xCode) {
 
     const typeClass = class extends TypeDef {
 
-        static types = {}
-
         static serialize(value) {
-            // takes a value and returns a Uint8Array
+            const bytes = new Uint8Array()
 
+            return bytes
         }
 
         static deserialize(bytes) {
-            // takes a Uint8Array and returns a value
+            const value = {}
 
+            return value
         }
 
-        constructor(input) {
-            super(input)
+        consume(bytes) {
+            return bytes.subarray(0, this.constructor.minBytesLength)
         }
 
     }
