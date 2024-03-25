@@ -5,6 +5,8 @@ class TypeDef {
 
     static minBytesLength = 0
 
+    static constructorOptionalArgs = []
+
     static serialize(value) { return new Uint8Array() }
 
     static deserialize(bytes) { return }
@@ -60,6 +62,8 @@ class intType extends TypeDef {
 
     static minBytesLength = 4
 
+    static constructorOptionalArgs = ['unsigned']
+
     static isValueInput(input) { return Number.isInteger(input) }
 
     static serialize(value) {
@@ -87,6 +91,8 @@ function enumFactory(body) {
         #body = body
         #identifier
 
+        static constructorOptionalArgs = []
+
         constructor(input) {
             const originalInput = input
             switch (typeof input) {
@@ -111,6 +117,8 @@ const boolType = enumFactory([false, true])
 class hyperType extends TypeDef {
 
     static minBytesLength = 8
+
+    static constructorOptionalArgs = ['unsigned']
 
     static isValueInput(input) { return typeof input === 'bigint' }
 
@@ -168,6 +176,8 @@ class doubleType extends TypeDef {
 
 class opaqueType extends TypeDef {
 
+    static constructorOptionalArgs = ['mode', 'length']
+
     static isValueInput(input) { return Array.isArray(input) }
 
     static serialize(value, instance, mode, length) {
@@ -212,6 +222,8 @@ class stringType extends TypeDef {
 
     #maxLength
 
+    static constructorOptionalArgs = ['length']
+
     static isValueInput(input) { return typeof input === 'string' }
 
     static serialize(value) {
@@ -252,12 +264,12 @@ class voidType extends TypeDef {
 
 }
 
-const XDR = {
-    enumFactory,
-    typedef: TypeDef,
+const xdrTypes = {
     int: intType, bool: boolType, hyper: hyperType, float: floatType, double: doubleType,
     opaque: opaqueType, string: stringType, void: voidType
 }
+
+const XDR = { enumFactory, typedef: TypeDef, ...xdrTypes }
 
 export default XDR
 
@@ -284,11 +296,13 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
     const identifierIndexOfLt = identifier.indexOf('<'), identifierIndexOfGt = identifier.indexOf('>'),
         identifierIndexOfBracketStart = identifier.indexOf('['), identifierIndexOfBracketEnd = identifier.indexOf(']')
     if ((identifierIndexOfLt > 0) && (identifierIndexOfLt < identifierIndexOfGt)) {
-        length = parseInt(identifier.slice(identifierIndexOfLt + 1, identifierIndexOfGt)) || constants[length] || undefined
+        const lengthName = identifier.slice(identifierIndexOfLt + 1, identifierIndexOfGt)
+        length = parseInt(lengthName) || constants[lengthName] || undefined
         identifier = identifier.slice(0, identifierIndexOfLt)
         mode = 'variable'
     } else if ((identifierIndexOfBracketStart > 0) && (identifierIndexOfBracketStart < identifierIndexOfBracketEnd)) {
-        length = parseInt(identifier.slice(identifierIndexOfBracketStart + 1, identifierIndexOfBracketEnd)) || constants[length] || undefined
+        const lengthName = identifier.slice(identifierIndexOfBracketStart + 1, identifierIndexOfBracketEnd)
+        length = parseInt(lengthName) || constants[lengthName] || undefined
         identifier = identifier.slice(0, identifierIndexOfBracketStart)
         mode = 'fixed'
     }
@@ -396,25 +410,70 @@ export function X(xCode) {
     }
     if (!entry) throw new Error('no entry found')
 
-    const outline = { entry, constants, enums, typedefs, unions, structs }
+    const manifest = { entry, constants, enums, typedefs, unions, structs }
 
-    console.log('line 401', JSON.stringify(
-        {
-            outline,
-            ...{ structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])) }
-        }, null, 4))
+    console.log('line 401', JSON.stringify(Object.assign(manifest, { structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])) }), null, 4))
 
     const typeClass = class extends TypeDef {
 
-        static #outline = outline
+        static manifest = manifest
 
-        static serialize(value) {
-            const bytes = new Uint8Array()
+        static serialize(value, instance) {
+            const bytes = new Uint8Array(), entry = this.manifest.entry
+            let entryPoint = this.manifest.structs[entry], entryType = entryPoint ? 'struct' : 'union'
+            entryPoint ??= this.manifest.unions[entry]
+            if (entryType === 'struct') {
+                const chunks = []
+                for (const [identifier, declaration] of Object.entries(entryPoint)) {
+                    const identifierValue = value[identifier]
+                    if (declaration.type in xdrTypes) {
+                        const typeClass = xdrTypes[declaration.type]
+                        const identifierInstance = new typeClass(identifierValue, ...typeClass.constructorOptionalArgs.map(a => declaration[a]))
+                        chunks.push(identifierInstance.bytes)
+                    } else if (declaration.type in this.manifest.structs) {
+
+                    } else if (declaration.type in this.manifest.unions) {
+                        const unionManifest = this.manifest.unions[declaration.type]
+                        const enumBody = this.manifest.enums[unionManifest.discriminant.type]
+                        const enumIdentifier = identifierValue[unionManifest.discriminant.value]
+                        const enumClass = enumFactory(enumBody)
+                        const enumInstance = new enumClass(enumIdentifier)
+
+                        chunks.push(enumInstance.bytes)
+
+                        const unionArm = unionManifest.arms[enumIdentifier]
+                        if (unionArm.type in xdrTypes) {
+                            const typeClass = xdrTypes[unionArm.type]
+                            const identifierValue = value[identifier][unionArm.identifier]
+                            const identifierInstance = new typeClass(identifierValue, ...typeClass.constructorOptionalArgs.map(a => declaration[a]))
+                            chunks.push(identifierInstance.bytes)
+                        }
+
+
+                    } else if (declaration.type in this.manifest.typedefs) {
+
+                    }
+                }
+
+                const totalLength = chunks.reduce((sum, a) => sum + a.length, 0)
+                const result = new Uint8Array(totalLength)
+                let offset = 0
+                for (const a of chunks) {
+                    result.set(a, offset)
+                    offset += a.length
+                }
+                return result
+
+                // console.log('line 455', chunks)
+            }
+
+
+            console.log('line 459', entry, entryType, entryPoint)
 
             return bytes
         }
 
-        static deserialize(bytes, dry) {
+        static deserialize(bytes, instance, dry) {
             const value = {}
 
             return value

@@ -49,22 +49,22 @@
          };
 `
 
-        const testBytes = new Uint8Array([
-            0x00, 0x00, 0x00, 0x09,
+        const fileBytes = new Uint8Array([
+            0x00, 0x00, 0x00, 0x09, // string filename
             0x73, 0x69, 0x6c, 0x6c,
             0x79, 0x70, 0x72, 0x6f,
             0x67, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x02,
-            0x00, 0x00, 0x00, 0x04,
+            0x00, 0x00, 0x00, 0x02, // enum filekind
+            0x00, 0x00, 0x00, 0x04, // string interpretor
             0x6c, 0x69, 0x73, 0x70,
-            0x00, 0x00, 0x00, 0x04,
+            0x00, 0x00, 0x00, 0x04, // string owner
             0x6a, 0x6f, 0x68, 0x6e,
-            0x00, 0x00, 0x00, 0x06,
+            0x00, 0x00, 0x00, 0x06, // opaque data
             0x28, 0x71, 0x75, 0x69,
             0x74, 0x29, 0x00, 0x00
         ])
 
-        const testValue = {
+        const fileValue = {
             filename: "sillyprog",
             type: {
                 kind: "EXEC",
@@ -78,13 +78,15 @@
 
         // console.log('line 69', testBytes)
 
-        const customType = X(xCode)
-        // console.log('line 72', customType)
+        const fileType = X(xCode)
+        // console.log('line 72', fileType)
 
         window.xdr = XDR
         window.x = X
 
-        window.testValue = testValue
+        window.fileType = fileType
+        window.fileBytes = fileBytes
+        window.fileValue = fileValue
 
     </script>
 
