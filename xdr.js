@@ -398,7 +398,7 @@ export function X(xCode) {
 
     const outline = { entry, constants, enums, typedefs, unions, structs }
 
-    console.log('line 405', JSON.stringify(
+    console.log('line 401', JSON.stringify(
         {
             outline,
             ...{ structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])) }
