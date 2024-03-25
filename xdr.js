@@ -5,7 +5,7 @@ class TypeDef {
 
     static minBytesLength = 0
 
-    static constructorOptionalArgs = []
+    static additionalArgs = []
 
     static serialize(value) { return new Uint8Array() }
 
@@ -62,7 +62,7 @@ class intType extends TypeDef {
 
     static minBytesLength = 4
 
-    static constructorOptionalArgs = ['unsigned']
+    static additionalArgs = ['unsigned']
 
     static isValueInput(input) { return Number.isInteger(input) }
 
@@ -91,8 +91,6 @@ function enumFactory(body) {
         #body = body
         #identifier
 
-        static constructorOptionalArgs = []
-
         constructor(input) {
             const originalInput = input
             switch (typeof input) {
@@ -118,7 +116,7 @@ class hyperType extends TypeDef {
 
     static minBytesLength = 8
 
-    static constructorOptionalArgs = ['unsigned']
+    static additionalArgs = ['unsigned']
 
     static isValueInput(input) { return typeof input === 'bigint' }
 
@@ -176,7 +174,7 @@ class doubleType extends TypeDef {
 
 class opaqueType extends TypeDef {
 
-    static constructorOptionalArgs = ['mode', 'length']
+    static additionalArgs = ['mode', 'length']
 
     static isValueInput(input) { return Array.isArray(input) }
 
@@ -222,7 +220,7 @@ class stringType extends TypeDef {
 
     #maxLength
 
-    static constructorOptionalArgs = ['length']
+    static additionalArgs = ['length']
 
     static isValueInput(input) { return typeof input === 'string' }
 
@@ -412,9 +410,24 @@ export function X(xCode) {
 
     const manifest = { entry, constants, enums, typedefs, unions, structs }
 
-    console.log('line 401', JSON.stringify(Object.assign(manifest, { structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])) }), null, 4))
+    console.log('line 413', JSON.stringify(Object.assign(manifest, { structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])) }), null, 4))
 
     const typeClass = class extends TypeDef {
+
+        #serializeSubValue(subValue, subManifest) {
+            if (type in xdrTypes) {
+                return (new xdrTypes[subManifest.type](identifierValue, ...xdrTypes[subManifest.type].additionalArgs.map(a => subManifest[a]))).bytes
+            } else if (subManifest.type in this.manifest.structs) {
+
+            } else if (subManifest.type in this.manifest.unions) {
+                const unionManifest = this.manifest.unions[subManifest.type], enumIdentifier = identifierValue[unionManifest.discriminant.value]
+                const discriminantBytes = (new enumFactory(this.manifest.enums[unionManifest.discriminant.type])(enumIdentifier)).bytes
+                const this.#serializeSubValue(subValue, unionManifest.arms[enumIdentifier])
+
+            } else if (subManifest.type in this.manifest.typedefs) {
+
+            }
+        }
 
         static manifest = manifest
 
@@ -424,38 +437,13 @@ export function X(xCode) {
             entryPoint ??= this.manifest.unions[entry]
             if (entryType === 'struct') {
                 const chunks = []
+                let totalLength = 0
                 for (const [identifier, declaration] of Object.entries(entryPoint)) {
-                    const identifierValue = value[identifier]
-                    if (declaration.type in xdrTypes) {
-                        const typeClass = xdrTypes[declaration.type]
-                        const identifierInstance = new typeClass(identifierValue, ...typeClass.constructorOptionalArgs.map(a => declaration[a]))
-                        chunks.push(identifierInstance.bytes)
-                    } else if (declaration.type in this.manifest.structs) {
-
-                    } else if (declaration.type in this.manifest.unions) {
-                        const unionManifest = this.manifest.unions[declaration.type]
-                        const enumBody = this.manifest.enums[unionManifest.discriminant.type]
-                        const enumIdentifier = identifierValue[unionManifest.discriminant.value]
-                        const enumClass = enumFactory(enumBody)
-                        const enumInstance = new enumClass(enumIdentifier)
-
-                        chunks.push(enumInstance.bytes)
-
-                        const unionArm = unionManifest.arms[enumIdentifier]
-                        if (unionArm.type in xdrTypes) {
-                            const typeClass = xdrTypes[unionArm.type]
-                            const identifierValue = value[identifier][unionArm.identifier]
-                            const identifierInstance = new typeClass(identifierValue, ...typeClass.constructorOptionalArgs.map(a => declaration[a]))
-                            chunks.push(identifierInstance.bytes)
-                        }
-
-
-                    } else if (declaration.type in this.manifest.typedefs) {
-
-                    }
+                    const chunk = this.#serializeSubValue(value[identifier], declaration)
+                    chunks.push(chunk)
+                    totalLength += chunk.length
                 }
 
-                const totalLength = chunks.reduce((sum, a) => sum + a.length, 0)
                 const result = new Uint8Array(totalLength)
                 let offset = 0
                 for (const a of chunks) {
