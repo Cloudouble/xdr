@@ -421,13 +421,9 @@ export function X(xCode) {
     }
     if (!entry) throw new Error('no entry found')
 
-    const manifest = { entry, constants, enums, typedefs, unions, structs }
-
-    console.log('line 413', JSON.stringify(Object.assign({ ...manifest }, { structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])) }), null, 4))
-
     const typeClass = class extends TypeDef {
 
-        static manifest = manifest
+        static manifest = { entry, constants, enums, typedefs, unions, structs }
 
         static serialize(value, declaration) {
             let type = declaration?.type ?? this.manifest.entry
