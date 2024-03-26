@@ -414,19 +414,31 @@ export function X(xCode) {
 
     const typeClass = class extends TypeDef {
 
-        #serializeSubValue(subValue, subManifest) {
-            if (type in xdrTypes) {
-                return (new xdrTypes[subManifest.type](identifierValue, ...xdrTypes[subManifest.type].additionalArgs.map(a => subManifest[a]))).bytes
+        static #serializeSubValue(subValue, subManifest) {
+            if (subManifest.type in xdrTypes) {
+                console.log('line 419', subManifest.type, subValue, subManifest)
+                return (new xdrTypes[subManifest.type](subValue, ...xdrTypes[subManifest.type].additionalArgs.map(a => subManifest[a]))).bytes
             } else if (subManifest.type in this.manifest.structs) {
+                console.log('line 422', subManifest.type)
 
             } else if (subManifest.type in this.manifest.unions) {
-                const unionManifest = this.manifest.unions[subManifest.type], enumIdentifier = identifierValue[unionManifest.discriminant.value]
-                const discriminantBytes = (new enumFactory(this.manifest.enums[unionManifest.discriminant.type])(enumIdentifier)).bytes
-                const this.#serializeSubValue(subValue, unionManifest.arms[enumIdentifier])
+                console.log('line 425', subManifest.type)
+                const unionManifest = this.manifest.unions[subManifest.type], enumIdentifier = subValue[unionManifest.discriminant.value]
+                const enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type])
+                const discriminantBytes = (new enumClass(enumIdentifier)).bytes
+                const armManifest = unionManifest.arms[enumIdentifier]
 
+                const armBytes = this.#serializeSubValue(subValue[armManifest.identifier], unionManifest.arms[enumIdentifier])
+
+                const result = new Uint8Array(discriminantBytes.length + armBytes.length)
+                result.set(discriminantBytes, 0)
+                result.set(armBytes, discriminantBytes.length)
+                return result
             } else if (subManifest.type in this.manifest.typedefs) {
+                console.log('line 434', subManifest.type)
 
             }
+            console.log('line 437', subManifest.type)
         }
 
         static manifest = manifest
