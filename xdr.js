@@ -417,14 +417,12 @@ export function X(xCode) {
         static manifest = manifest
 
         static serialize(value, type, declaration) {
-            if ((type instanceof Object) && ('type' in type)) {
-                declaration = type
-                type = declaration.type
-            }
+            if ((type instanceof Object) && ('type' in type)) declaration = { type } = type
             type ||= this.manifest.entry
             declaration ||= this.manifest.structs[type]
+            let result
             if (type in xdrTypes) {
-                return (new xdrTypes[type](value, ...xdrTypes[type].additionalArgs.map(a => declaration[a]))).bytes
+                result = (new xdrTypes[type](value, ...xdrTypes[type].additionalArgs.map(a => declaration[a]))).bytes
             } else if (type in this.manifest.structs) {
                 const chunks = []
                 let totalLength = 0
@@ -433,18 +431,17 @@ export function X(xCode) {
                     chunks.push([chunk, totalLength])
                     totalLength += chunk.length
                 }
-                const result = new Uint8Array(totalLength)
+                result = new Uint8Array(totalLength)
                 for (const chunk of chunks) result.set(...chunk)
-                return result
             } else if (type in this.manifest.unions) {
                 const unionManifest = this.manifest.unions[type], enumIdentifier = value[unionManifest.discriminant.value],
                     enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type]), discriminantBytes = (new enumClass(enumIdentifier)).bytes,
-                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(value[armManifest.identifier], unionManifest.arms[enumIdentifier]),
-                    result = new Uint8Array(discriminantBytes.length + armBytes.length)
+                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(value[armManifest.identifier], unionManifest.arms[enumIdentifier])
+                result = new Uint8Array(discriminantBytes.length + armBytes.length)
                 result.set(discriminantBytes, 0)
                 result.set(armBytes, discriminantBytes.length)
-                return result
             }
+            return result
         }
 
         static deserialize(bytes, instance, dry) {
