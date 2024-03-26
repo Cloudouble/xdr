@@ -425,7 +425,7 @@ export function X(xCode) {
 
         static manifest = { entry, constants, enums, typedefs, unions, structs }
 
-        static serialize(value, declaration) {
+        static serialize(value, instance, declaration) {
             let type = declaration?.type ?? this.manifest.entry
             declaration ??= this.manifest.structs[type]
             let result
@@ -435,7 +435,7 @@ export function X(xCode) {
                 const chunks = []
                 let totalLength = 0
                 for (const [identifier, identifierDeclaration] of declaration.entries()) {
-                    const chunk = this.serialize(value[identifier], identifierDeclaration)
+                    const chunk = this.serialize(value[identifier], undefined, identifierDeclaration)
                     chunks.push([chunk, totalLength])
                     totalLength += chunk.length
                 }
@@ -444,7 +444,7 @@ export function X(xCode) {
             } else if (type in this.manifest.unions) {
                 const unionManifest = this.manifest.unions[type], enumIdentifier = value[unionManifest.discriminant.value],
                     enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type]), discriminantBytes = (new enumClass(enumIdentifier)).bytes,
-                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(value[armManifest.identifier], unionManifest.arms[enumIdentifier])
+                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(value[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier])
                 result = new Uint8Array(discriminantBytes.length + armBytes.length)
                 result.set(discriminantBytes, 0)
                 result.set(armBytes, discriminantBytes.length)
@@ -452,7 +452,7 @@ export function X(xCode) {
             return result
         }
 
-        static deserialize(bytes, declaration, raw) {
+        static deserialize(bytes, instance, declaration, raw) {
             const type = declaration?.type ?? this.manifest.entry
             declaration ??= this.manifest.structs[type]
             let result
@@ -462,7 +462,7 @@ export function X(xCode) {
                 const value = {}
                 let byteLength = 0, entryResult
                 for (const [identifier, identifierDeclaration] of declaration.entries()) {
-                    entryResult = this.deserialize(bytes, identifierDeclaration, true)
+                    entryResult = this.deserialize(bytes, undefined, identifierDeclaration, true)
                     byteLength += entryResult.bytes.byteLength
                     value[identifier] = entryResult.value
                     bytes = bytes.subarray(entryResult.bytes.byteLength)
@@ -476,7 +476,7 @@ export function X(xCode) {
                 newBytes = newBytes.subarray(discriminantInstance.bytes.byteLength)
                 byteLength += discriminantInstance.bytes.byteLength
                 const armManifest = unionManifest.arms[discriminantInstance.identifier],
-                    armValue = this.deserialize(newBytes, unionManifest.arms[discriminantInstance.identifier], true)
+                    armValue = this.deserialize(newBytes, undefined, unionManifest.arms[discriminantInstance.identifier], true)
                 value[armManifest.identifier] = armValue.value
                 byteLength += armValue.bytes.byteLength
                 result = { value, bytes: { byteLength } }
@@ -485,7 +485,8 @@ export function X(xCode) {
         }
 
         consume(bytes) {
-            return bytes.subarray(0, this.constructor.minBytesLength)
+            const newBytes = bytes.slice(0), testValue = this.constructor.deserialize(newBytes, undefined, undefined, true)
+            return bytes.subarray(0, testValue.bytes.byteLength)
         }
 
     }
