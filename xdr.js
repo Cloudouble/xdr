@@ -191,7 +191,16 @@ class opaqueType extends TypeDef {
         return bytes
     }
 
-    static deserialize(bytes, instance) { return instance.mode === 'fixed' ? Array.from(bytes) : Array.from(bytes.subarray(4)) }
+    static deserialize(bytes, instance) {
+        switch (instance.mode) {
+            case 'fixed':
+                return Array.from(bytes)
+            case 'variable':
+                const maxOffset = this.getView(bytes).getUint32(0, false) + 4, data = []
+                for (let offset = 4; offset < maxOffset; offset++) data.push(bytes[offset])
+                return data
+        }
+    }
 
     constructor(input, mode, length) {
         if (mode !== 'variable') mode = 'fixed'
@@ -233,7 +242,11 @@ class stringType extends TypeDef {
         return bytes
     }
 
-    static deserialize(bytes) { return (new TextDecoder()).decode(bytes.subarray(4)) }
+    static deserialize(bytes) {
+        const maxOffset = this.getView(bytes).getUint32(0, false) + 4, chars = [], decoder = new TextDecoder()
+        for (let offset = 4; offset < maxOffset; offset++) chars.push(decoder.decode(bytes.subarray(offset, offset + 1)))
+        return chars.join('')
+    }
 
     constructor(input, maxLength) {
         super(input, length)
@@ -460,7 +473,7 @@ export function X(xCode) {
                 }
                 result = { value, bytes: { byteLength } }
             } else if (type in this.manifest.unions) {
-                let byteLength = 0, newBytes = bytes.slice()
+                let byteLength = 0, newBytes = bytes.subarray(0)
                 const unionManifest = this.manifest.unions[type],
                     enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type]), discriminantInstance = new enumClass(newBytes),
                     value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
