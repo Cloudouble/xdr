@@ -241,7 +241,7 @@ class stringType extends TypeDef {
     }
 
     consume(bytes, maxLength) {
-        const stringLength = this.getView(bytes).getUint32(0, false)
+        const stringLength = this.constructor.getView(bytes).getUint32(0, false)
         if (maxLength && (stringLength > maxLength)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${stringLength}`)
         let consumeLength = Math.ceil(stringLength / 4) * 4
         if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
@@ -460,14 +460,16 @@ export function X(xCode) {
                 }
                 result = { value, bytes: { byteLength } }
             } else if (type in this.manifest.unions) {
+                let byteLength = 0, newBytes = bytes.slice()
                 const unionManifest = this.manifest.unions[type],
-                    enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type]), discriminantInstance = new enumClass(bytes),
+                    enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type]), discriminantInstance = new enumClass(newBytes),
                     value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
-                bytes = bytes.subarray(discriminantInstance.bytes.byteLength)
+                newBytes = newBytes.subarray(discriminantInstance.bytes.byteLength)
+                byteLength += discriminantInstance.bytes.byteLength
                 const armManifest = unionManifest.arms[discriminantInstance.identifier],
-                    armValue = this.serialize(bytes, unionManifest.arms[discriminantInstance.identifier])
+                    armValue = this.deserialize(newBytes, unionManifest.arms[discriminantInstance.identifier], true)
                 value[armManifest.identifier] = armValue.value
-                bytes = bytes.subarray(armValue.bytes.byteLength)
+                byteLength += armValue.bytes.byteLength
                 result = { value, bytes: { byteLength } }
             }
             return raw ? result : result.value
