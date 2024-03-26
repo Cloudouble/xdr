@@ -414,63 +414,37 @@ export function X(xCode) {
 
     const typeClass = class extends TypeDef {
 
-        static #serializeSubValue(subValue, subManifest) {
-            if (subManifest.type in xdrTypes) {
-                console.log('line 419', subManifest.type, subValue, subManifest)
-                return (new xdrTypes[subManifest.type](subValue, ...xdrTypes[subManifest.type].additionalArgs.map(a => subManifest[a]))).bytes
-            } else if (subManifest.type in this.manifest.structs) {
-                console.log('line 422', subManifest.type)
+        static manifest = manifest
 
-            } else if (subManifest.type in this.manifest.unions) {
-                console.log('line 425', subManifest.type)
-                const unionManifest = this.manifest.unions[subManifest.type], enumIdentifier = subValue[unionManifest.discriminant.value]
-                const enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type])
-                const discriminantBytes = (new enumClass(enumIdentifier)).bytes
-                const armManifest = unionManifest.arms[enumIdentifier]
-
-                const armBytes = this.#serializeSubValue(subValue[armManifest.identifier], unionManifest.arms[enumIdentifier])
-
-                const result = new Uint8Array(discriminantBytes.length + armBytes.length)
+        static serialize(value, type, declaration) {
+            if ((type instanceof Object) && ('type' in type)) {
+                declaration = type
+                type = declaration.type
+            }
+            type ||= this.manifest.entry
+            declaration ||= this.manifest.structs[type]
+            if (type in xdrTypes) {
+                return (new xdrTypes[type](value, ...xdrTypes[type].additionalArgs.map(a => declaration[a]))).bytes
+            } else if (type in this.manifest.structs) {
+                const chunks = []
+                let totalLength = 0
+                for (const [identifier, identifierDeclaration] of Object.entries(declaration)) {
+                    const chunk = this.serialize(value[identifier], identifierDeclaration)
+                    chunks.push([chunk, totalLength])
+                    totalLength += chunk.length
+                }
+                const result = new Uint8Array(totalLength)
+                for (const chunk of chunks) result.set(...chunk)
+                return result
+            } else if (type in this.manifest.unions) {
+                const unionManifest = this.manifest.unions[type], enumIdentifier = value[unionManifest.discriminant.value],
+                    enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type]), discriminantBytes = (new enumClass(enumIdentifier)).bytes,
+                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(value[armManifest.identifier], unionManifest.arms[enumIdentifier]),
+                    result = new Uint8Array(discriminantBytes.length + armBytes.length)
                 result.set(discriminantBytes, 0)
                 result.set(armBytes, discriminantBytes.length)
                 return result
-            } else if (subManifest.type in this.manifest.typedefs) {
-                console.log('line 434', subManifest.type)
-
             }
-            console.log('line 437', subManifest.type)
-        }
-
-        static manifest = manifest
-
-        static serialize(value, instance) {
-            const bytes = new Uint8Array(), entry = this.manifest.entry
-            let entryPoint = this.manifest.structs[entry], entryType = entryPoint ? 'struct' : 'union'
-            entryPoint ??= this.manifest.unions[entry]
-            if (entryType === 'struct') {
-                const chunks = []
-                let totalLength = 0
-                for (const [identifier, declaration] of Object.entries(entryPoint)) {
-                    const chunk = this.#serializeSubValue(value[identifier], declaration)
-                    chunks.push(chunk)
-                    totalLength += chunk.length
-                }
-
-                const result = new Uint8Array(totalLength)
-                let offset = 0
-                for (const a of chunks) {
-                    result.set(a, offset)
-                    offset += a.length
-                }
-                return result
-
-                // console.log('line 455', chunks)
-            }
-
-
-            console.log('line 459', entry, entryType, entryPoint)
-
-            return bytes
         }
 
         static deserialize(bytes, instance, dry) {
