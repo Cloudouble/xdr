@@ -410,23 +410,22 @@ export function X(xCode) {
 
     const manifest = { entry, constants, enums, typedefs, unions, structs }
 
-    console.log('line 413', JSON.stringify(Object.assign(manifest, { structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])) }), null, 4))
+    console.log('line 413', JSON.stringify(Object.assign({ ...manifest }, { structs: Object.fromEntries(Object.entries(structs).map(ent => [ent[0], Object.fromEntries(ent[1].entries())])) }), null, 4))
 
     const typeClass = class extends TypeDef {
 
         static manifest = manifest
 
-        static serialize(value, type, declaration) {
-            if ((type instanceof Object) && ('type' in type)) declaration = { type } = type
-            type ||= this.manifest.entry
-            declaration ||= this.manifest.structs[type]
+        static serialize(value, declaration) {
+            let type = declaration?.type ?? this.manifest.entry
+            declaration ??= this.manifest.structs[type]
             let result
             if (type in xdrTypes) {
                 result = (new xdrTypes[type](value, ...xdrTypes[type].additionalArgs.map(a => declaration[a]))).bytes
             } else if (type in this.manifest.structs) {
                 const chunks = []
                 let totalLength = 0
-                for (const [identifier, identifierDeclaration] of Object.entries(declaration)) {
+                for (const [identifier, identifierDeclaration] of declaration.entries()) {
                     const chunk = this.serialize(value[identifier], identifierDeclaration)
                     chunks.push([chunk, totalLength])
                     totalLength += chunk.length
@@ -444,10 +443,34 @@ export function X(xCode) {
             return result
         }
 
-        static deserialize(bytes, instance, dry) {
-            const value = {}
-
-            return value
+        static deserialize(bytes, declaration, raw) {
+            const type = declaration?.type ?? this.manifest.entry
+            declaration ??= this.manifest.structs[type]
+            let result
+            if (type in xdrTypes) {
+                result = (new xdrTypes[type](bytes, ...xdrTypes[type].additionalArgs.map(a => declaration[a])))
+            } else if (type in this.manifest.structs) {
+                const value = {}
+                let byteLength = 0, entryResult
+                for (const [identifier, identifierDeclaration] of declaration.entries()) {
+                    entryResult = this.deserialize(bytes, identifierDeclaration, true)
+                    byteLength += entryResult.bytes.byteLength
+                    value[identifier] = entryResult.value
+                    bytes = bytes.subarray(entryResult.bytes.byteLength)
+                }
+                result = { value, bytes: { byteLength } }
+            } else if (type in this.manifest.unions) {
+                const unionManifest = this.manifest.unions[type],
+                    enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type]), discriminantInstance = new enumClass(bytes),
+                    value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
+                bytes = bytes.subarray(discriminantInstance.bytes.byteLength)
+                const armManifest = unionManifest.arms[discriminantInstance.identifier],
+                    armValue = this.serialize(bytes, unionManifest.arms[discriminantInstance.identifier])
+                value[armManifest.identifier] = armValue.value
+                bytes = bytes.subarray(armValue.bytes.byteLength)
+                result = { value, bytes: { byteLength } }
+            }
+            return raw ? result : result.value
         }
 
         consume(bytes) {
