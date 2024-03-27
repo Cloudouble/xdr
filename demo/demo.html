@@ -58,10 +58,10 @@
         // deserialize any Uint8Array of bytes to a live object that conforms to the type definition
         console.log("Deserialize: ", XDR.deserialize(fileBytes, fileType))
 
-        // serialize any conforming value to a base64 string encoding the bytes
+        // stringify any conforming value to a base64 string encoding the bytes
         const base64Str = XDR.stringify(fileValue, fileType)
 
-        // deserialize any base64 string encoding of bytes to a live object that conforms to the type definition
+        // parse any base64 string encoding of bytes to a live object that conforms to the type definition
         const parseResult = XDR.parse(base64Str, fileType)
 
         console.log("Base64 byte string: ", base64Str)
