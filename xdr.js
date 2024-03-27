@@ -84,39 +84,9 @@ class intType extends TypeDef {
 
 }
 
-function enumFactory(body) {
-    if (!body || !Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
-    return class extends intType {
-
-        #body = body
-        #identifier
-
-        constructor(input) {
-            const originalInput = input
-            switch (typeof input) {
-                case 'boolean': case 'string':
-                    input = body.indexOf(input)
-            }
-            super(input, true)
-            const value = this.value
-            if (this.#body[value] === undefined) throw new Error(`no enum identifier found for ${typeof originalInput} ${originalInput}`)
-            this.#identifier = this.#body[value]
-        }
-
-        get identifier() { return this.#identifier }
-
-        get body() { return this.#body }
-
-    }
-}
-
-const boolType = enumFactory([false, true])
-
-class hyperType extends TypeDef {
+class hyperType extends intType {
 
     static minBytesLength = 8
-
-    static additionalArgs = ['unsigned']
 
     static isValueInput(input) { return typeof input === 'bigint' }
 
@@ -129,11 +99,6 @@ class hyperType extends TypeDef {
     static deserialize(bytes) {
         const view = this.getView(bytes)
         return this.unsigned ? view.getBigUint64(0, false) : view.getBigInt64(0, false)
-    }
-
-    constructor(input, unsigned) {
-        super(input)
-        this.unsigned = this.constructor.isValueInput(input) ? input >= 0n : !!unsigned
     }
 
     toJSON() { return this.value ? `${this.value}` : null }
@@ -156,11 +121,9 @@ class floatType extends TypeDef {
 
 }
 
-class doubleType extends TypeDef {
+class doubleType extends floatType {
 
     static minBytesLength = 8
-
-    static isValueInput(input) { return typeof input === 'number' }
 
     static serialize(value) {
         const view = this.getView(8)
@@ -269,8 +232,6 @@ class voidType extends TypeDef {
 
     static isValueInput(input) { return input == null }
 
-    static serialize() { return new Uint8Array(0) }
-
     static deserialize() { return null }
 
 }
@@ -280,33 +241,6 @@ function resolveTypeDef(typedef) {
     if (!(typedef.prototype instanceof TypeDef)) throw new Error(`Invalid typedef: ${typedef}`)
     return typedef
 }
-
-const XDR = {
-    serialize: function (value, typedef) {
-        typedef = resolveTypeDef(typedef)
-        return (new typedef(value)).bytes
-    },
-    deserialize: function (bytes, typedef) {
-        typedef = resolveTypeDef(typedef)
-        return (new typedef(bytes)).value
-    },
-    parse: function (str, typedef) {
-        const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
-        return this.deserialize(bytes, typedef)
-    },
-    stringify: function (value, typedef) {
-        return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef)))
-    },
-    enumFactory,
-    types: {
-        typedef: TypeDef,
-        int: intType, bool: boolType, hyper: hyperType, float: floatType, double: doubleType,
-        opaque: opaqueType, string: stringType, void: voidType
-    }
-}
-
-export default XDR
 
 const rx = {
     'const': /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
@@ -344,7 +278,33 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
     return { type, length, mode, identifier, optional, unsigned }
 }
 
-export function X(xCode) {
+function createEnum(body) {
+    if (!body || !Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
+    return class extends intType {
+
+        #body = body
+        #identifier
+
+        constructor(input) {
+            const originalInput = input
+            switch (typeof input) {
+                case 'boolean': case 'string':
+                    input = body.indexOf(input)
+            }
+            super(input, true)
+            const value = this.value
+            if (this.#body[value] === undefined) throw new Error(`no enum identifier found for ${typeof originalInput} ${originalInput}`)
+            this.#identifier = this.#body[value]
+        }
+
+        get identifier() { return this.#identifier }
+
+        get body() { return this.#body }
+
+    }
+}
+
+function parseX(xCode) {
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
@@ -385,9 +345,7 @@ export function X(xCode) {
             map.set(identifier, { type, length, mode, optional, unsigned })
         }
         return [structName, map]
-    }
-
-    const buildUnionFromMatch = function (m) {
+    }, buildUnionFromMatch = function (m) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', unionName = isTypeDef ? m[6] : m[1], discriminantDeclaration = isTypeDef ? m[4] : m[2],
             [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim()), arms = {},
             discriminant = { type: discriminantType, value: discriminantValue }, unionBody = isTypeDef ? m[5] : m[3], queuedArms = []
@@ -415,10 +373,8 @@ export function X(xCode) {
                 default:
                     arms[discriminantValue] = parseTypeLengthModeIdentifier(armDeclaration, constants)
             }
-            if (queuedArms.length) {
-                for (const d of queuedArms) arms[d] = { ...arms[discriminantValue] }
-                queuedArms.length = 0
-            }
+            if (queuedArms.length) for (const d of queuedArms) arms[d] = { ...arms[discriminantValue] }
+            queuedArms.length = 0
         }
         return [unionName, discriminant, arms]
     }
@@ -439,10 +395,7 @@ export function X(xCode) {
     const dependedTypes = new Set()
     for (const name in unions) for (const a in unions[name].arms) dependedTypes.add(unions[name].arms[a].type)
     for (const name in structs) for (const p in structs[name]) dependedTypes.add(structs[name][p].type)
-    for (const name of Object.keys(structs).concat(Object.keys(unions))) {
-        if (!dependedTypes.has(name)) entry = name
-        if (entry) break
-    }
+    for (const name of Object.keys(structs).concat(Object.keys(unions))) if (!dependedTypes.has(name)) { entry = name; break }
     if (!entry) throw new Error('no entry found')
 
     const typeClass = class extends TypeDef {
@@ -467,7 +420,7 @@ export function X(xCode) {
                 for (const chunk of chunks) result.set(...chunk)
             } else if (type in this.manifest.unions) {
                 const unionManifest = this.manifest.unions[type], enumIdentifier = value[unionManifest.discriminant.value],
-                    enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type]), discriminantBytes = (new enumClass(enumIdentifier)).bytes,
+                    enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type]), discriminantBytes = (new enumClass(enumIdentifier)).bytes,
                     armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(value[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier])
                 result = new Uint8Array(discriminantBytes.length + armBytes.length)
                 result.set(discriminantBytes, 0)
@@ -495,7 +448,7 @@ export function X(xCode) {
             } else if (type in this.manifest.unions) {
                 let byteLength = 0, newBytes = bytes.subarray(0)
                 const unionManifest = this.manifest.unions[type],
-                    enumClass = enumFactory(this.manifest.enums[unionManifest.discriminant.type]), discriminantInstance = new enumClass(newBytes),
+                    enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type]), discriminantInstance = new enumClass(newBytes),
                     value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
                 newBytes = newBytes.subarray(discriminantInstance.bytes.byteLength)
                 byteLength += discriminantInstance.bytes.byteLength
@@ -518,3 +471,38 @@ export function X(xCode) {
     return typeClass
 
 }
+
+const XDR = {
+    createEnum,
+    serialize: function (value, typedef) {
+        typedef = resolveTypeDef(typedef)
+        return (new typedef(value)).bytes
+    },
+    deserialize: function (bytes, typedef) {
+        typedef = resolveTypeDef(typedef)
+        return (new typedef(bytes)).value
+    },
+    parse: function (str, typedef) {
+        const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
+        return this.deserialize(bytes, typedef)
+    },
+    stringify: function (value, typedef) {
+        return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef)))
+    },
+    factory: async function (str) {
+        if (typeof str !== 'string') throw new Error('string expected')
+        if (str in this.types) return this.types[str]
+        if (str.startsWith('https://') || str.startsWith('http://')) str = await (await fetch(str)).text()
+        this.types[str] = parseX(str)
+        return this.types[str]
+    },
+    types: {
+        typedef: TypeDef,
+        int: intType, hyper: hyperType, float: floatType, double: doubleType,
+        opaque: opaqueType, string: stringType, void: voidType
+    }
+}
+XDR.types.bool = XDR.createEnum([false, true])
+
+export default XDR

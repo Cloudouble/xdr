@@ -11,7 +11,7 @@
 
     <link rel="modulepreload" href="../xdr.js">
     <script type="module">
-        import XDR, { X } from "../xdr.js"
+        import XDR from "../xdr.js"
 
         const xCode = `const MAXUSERNAME = 32;     /* max length of a user name */
          const MAXFILELEN = 65535;   /* max length of a file      */
@@ -76,11 +76,10 @@
 
         console.log('line 77', XDR)
 
-        const fileType = X(xCode)
+        const fileType = await XDR.factory(xCode)
         console.log('line 80', fileType)
 
         window.xdr = XDR
-        window.x = X
 
         window.fileType = fileType
         window.fileBytes = fileBytes
