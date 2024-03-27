@@ -455,7 +455,7 @@ function parseX(xCode) {
 const XDR = {
     createEnum,
     factory: async function (str) {
-        if (typeof str !== 'string') throw new Error('string expected')
+        if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
         if (str in this.types) return this.types[str]
         if (str.startsWith('https://') || str.startsWith('http://')) str = await (await fetch(str)).text()
         this.types[str] = parseX(str)
