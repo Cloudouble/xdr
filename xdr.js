@@ -3,22 +3,17 @@ class TypeDef {
     #bytes
     #value
 
+    static additionalArgs = []
     static minBytesLength = 0
 
-    static additionalArgs = []
-
-    static serialize(value) { return new Uint8Array() }
-
     static deserialize(bytes) { return }
-
     static getView(i, byteOffset, byteLength) {
         if (typeof i === 'number') return new DataView(new ArrayBuffer(i))
         if (i instanceof Uint8Array) return new DataView(i.buffer, i.byteOffset + (byteOffset ?? 0), byteLength ?? i.byteLength)
     }
-
-    static isValueInput(input) { return input && !(input instanceof Uint8Array) && (input instanceof Object) }
-
     static isMinBytesInput(bytes) { return Number.isInteger(this.minBytesLength) ? (bytes.length >= this.minBytesLength) : true }
+    static isValueInput(input) { return input && !(input instanceof Uint8Array) && (input instanceof Object) }
+    static serialize(value) { return new Uint8Array() }
 
     constructor(input, ...consumeArgs) {
         if (!(input instanceof Uint8Array) && Array.isArray(input) && input.every(i => Number.isInteger(i) && (i >= 0) && (i <= 255))) input = new Uint8Array(input)
@@ -40,7 +35,6 @@ class TypeDef {
     get value() { return this.#value ??= this.constructor.deserialize(this.#bytes, this) }
 
     toJSON() { return this.value ? this.value : null }
-
     toString() {
         try {
             return this.value ? JSON.stringify(this.value) : 'null'
@@ -48,7 +42,6 @@ class TypeDef {
             throw new Error(`Error converting ${this.constructor.name} to string: ${e.message}`, { cause: e })
         }
     }
-
     valueOf() { return this.value }
 
     #consume(bytes, ...consumeArgs) {
@@ -60,21 +53,18 @@ class TypeDef {
 
 class intType extends TypeDef {
 
-    static minBytesLength = 4
-
     static additionalArgs = ['unsigned']
-
-    static isValueInput(input) { return Number.isInteger(input) }
-
-    static serialize(value) {
-        const view = this.getView(4)
-        this.unsigned ? view.setUint32(0, value, false) : view.setInt32(0, value, false)
-        return new Uint8Array(view.buffer)
-    }
+    static minBytesLength = 4
 
     static deserialize(bytes) {
         const view = this.getView(bytes)
         return this.unsigned ? view.getUint32(0, false) : view.getInt32(0, false)
+    }
+    static isValueInput(input) { return Number.isInteger(input) }
+    static serialize(value) {
+        const view = this.getView(4)
+        this.unsigned ? view.setUint32(0, value, false) : view.setInt32(0, value, false)
+        return new Uint8Array(view.buffer)
     }
 
     constructor(input, unsigned) {
@@ -88,17 +78,15 @@ class hyperType extends intType {
 
     static minBytesLength = 8
 
+    static deserialize(bytes) {
+        const view = this.getView(bytes)
+        return this.unsigned ? view.getBigUint64(0, false) : view.getBigInt64(0, false)
+    }
     static isValueInput(input) { return typeof input === 'bigint' }
-
     static serialize(value) {
         const view = this.getView(8)
         view.setBigUint64(0, BigInt.asUintN(64, value), false)
         return new Uint8Array(view.buffer)
-    }
-
-    static deserialize(bytes) {
-        const view = this.getView(bytes)
-        return this.unsigned ? view.getBigUint64(0, false) : view.getBigInt64(0, false)
     }
 
     toJSON() { return this.value ? `${this.value}` : null }
@@ -109,15 +97,13 @@ class floatType extends TypeDef {
 
     static minBytesLength = 4
 
+    static deserialize(bytes) { return this.getView(bytes).getFloat32(0, false) }
     static isValueInput(input) { return typeof input === 'number' }
-
     static serialize(value) {
         const view = this.getView(4)
         view.setFloat32(0, value, false)
         return new Uint8Array(view.buffer)
     }
-
-    static deserialize(bytes) { return this.getView(bytes).getFloat32(0, false) }
 
 }
 
@@ -125,13 +111,12 @@ class doubleType extends floatType {
 
     static minBytesLength = 8
 
+    static deserialize(bytes) { return this.getView(bytes).getFloat64(0, false) }
     static serialize(value) {
         const view = this.getView(8)
         view.setFloat64(0, value, false)
         return new Uint8Array(view.buffer)
     }
-
-    static deserialize(bytes) { return this.getView(bytes).getFloat64(0, false) }
 
 }
 
@@ -139,8 +124,17 @@ class opaqueType extends TypeDef {
 
     static additionalArgs = ['mode', 'length']
 
+    static deserialize(bytes, instance) {
+        switch (instance.mode) {
+            case 'fixed':
+                return Array.from(bytes)
+            case 'variable':
+                const maxOffset = this.getView(bytes).getUint32(0, false) + 4, data = []
+                for (let offset = 4; offset < maxOffset; offset++) data.push(bytes[offset])
+                return data
+        }
+    }
     static isValueInput(input) { return Array.isArray(input) }
-
     static serialize(value, instance, mode, length) {
         mode ??= instance.mode
         length ??= instance.length
@@ -152,17 +146,6 @@ class opaqueType extends TypeDef {
         }
         bytes.set(value, mode === 'fixed' ? 0 : 4)
         return bytes
-    }
-
-    static deserialize(bytes, instance) {
-        switch (instance.mode) {
-            case 'fixed':
-                return Array.from(bytes)
-            case 'variable':
-                const maxOffset = this.getView(bytes).getUint32(0, false) + 4, data = []
-                for (let offset = 4; offset < maxOffset; offset++) data.push(bytes[offset])
-                return data
-        }
     }
 
     constructor(input, mode, length) {
@@ -194,8 +177,12 @@ class stringType extends TypeDef {
 
     static additionalArgs = ['length']
 
+    static deserialize(bytes) {
+        const maxOffset = this.getView(bytes).getUint32(0, false) + 4, chars = [], decoder = new TextDecoder()
+        for (let offset = 4; offset < maxOffset; offset++) chars.push(decoder.decode(bytes.subarray(offset, offset + 1)))
+        return chars.join('')
+    }
     static isValueInput(input) { return typeof input === 'string' }
-
     static serialize(value) {
         const stringBytes = (new TextEncoder()).encode(value), view = this.getView(4),
             bytes = new Uint8Array(4 + (Math.ceil(stringBytes.length / 4) * 4))
@@ -203,12 +190,6 @@ class stringType extends TypeDef {
         bytes.set(new Uint8Array(view.buffer))
         bytes.set(stringBytes, 4)
         return bytes
-    }
-
-    static deserialize(bytes) {
-        const maxOffset = this.getView(bytes).getUint32(0, false) + 4, chars = [], decoder = new TextDecoder()
-        for (let offset = 4; offset < maxOffset; offset++) chars.push(decoder.decode(bytes.subarray(offset, offset + 1)))
-        return chars.join('')
     }
 
     constructor(input, maxLength) {
@@ -230,9 +211,8 @@ class stringType extends TypeDef {
 
 class voidType extends TypeDef {
 
-    static isValueInput(input) { return input == null }
-
     static deserialize() { return null }
+    static isValueInput(input) { return input == null }
 
 }
 
@@ -474,13 +454,20 @@ function parseX(xCode) {
 
 const XDR = {
     createEnum,
-    serialize: function (value, typedef) {
-        typedef = resolveTypeDef(typedef)
-        return (new typedef(value)).bytes
+    factory: async function (str) {
+        if (typeof str !== 'string') throw new Error('string expected')
+        if (str in this.types) return this.types[str]
+        if (str.startsWith('https://') || str.startsWith('http://')) str = await (await fetch(str)).text()
+        this.types[str] = parseX(str)
+        return this.types[str]
     },
     deserialize: function (bytes, typedef) {
         typedef = resolveTypeDef(typedef)
         return (new typedef(bytes)).value
+    },
+    serialize: function (value, typedef) {
+        typedef = resolveTypeDef(typedef)
+        return (new typedef(value)).bytes
     },
     parse: function (str, typedef) {
         const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
@@ -489,13 +476,6 @@ const XDR = {
     },
     stringify: function (value, typedef) {
         return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef)))
-    },
-    factory: async function (str) {
-        if (typeof str !== 'string') throw new Error('string expected')
-        if (str in this.types) return this.types[str]
-        if (str.startsWith('https://') || str.startsWith('http://')) str = await (await fetch(str)).text()
-        this.types[str] = parseX(str)
-        return this.types[str]
     },
     types: {
         typedef: TypeDef,
