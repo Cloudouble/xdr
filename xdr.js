@@ -275,12 +275,36 @@ class voidType extends TypeDef {
 
 }
 
-const xdrTypes = {
-    int: intType, bool: boolType, hyper: hyperType, float: floatType, double: doubleType,
-    opaque: opaqueType, string: stringType, void: voidType
+function resolveTypeDef(typedef) {
+    if (typeof typedef === 'string') typedef = XDR.types[typedef]
+    if (!(typedef.prototype instanceof TypeDef)) throw new Error(`Invalid typedef: ${typedef}`)
+    return typedef
 }
 
-const XDR = { enumFactory, typedef: TypeDef, ...xdrTypes }
+const XDR = {
+    serialize: function (value, typedef) {
+        typedef = resolveTypeDef(typedef)
+        return (new typedef(value)).bytes
+    },
+    deserialize: function (bytes, typedef) {
+        typedef = resolveTypeDef(typedef)
+        return (new typedef(bytes)).value
+    },
+    parse: function (str, typedef) {
+        const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
+        return this.deserialize(bytes, typedef)
+    },
+    stringify: function (value, typedef) {
+        return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef)))
+    },
+    enumFactory,
+    types: {
+        typedef: TypeDef,
+        int: intType, bool: boolType, hyper: hyperType, float: floatType, double: doubleType,
+        opaque: opaqueType, string: stringType, void: voidType
+    }
+}
 
 export default XDR
 
@@ -429,8 +453,8 @@ export function X(xCode) {
             let type = declaration?.type ?? this.manifest.entry
             declaration ??= this.manifest.structs[type]
             let result
-            if (type in xdrTypes) {
-                result = (new xdrTypes[type](value, ...xdrTypes[type].additionalArgs.map(a => declaration[a]))).bytes
+            if (type in XDR.types) {
+                result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
             } else if (type in this.manifest.structs) {
                 const chunks = []
                 let totalLength = 0
@@ -456,8 +480,8 @@ export function X(xCode) {
             const type = declaration?.type ?? this.manifest.entry
             declaration ??= this.manifest.structs[type]
             let result
-            if (type in xdrTypes) {
-                result = (new xdrTypes[type](bytes, ...xdrTypes[type].additionalArgs.map(a => declaration[a])))
+            if (type in XDR.types) {
+                result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
             } else if (type in this.manifest.structs) {
                 const value = {}
                 let byteLength = 0, entryResult
