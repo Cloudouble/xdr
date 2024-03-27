@@ -26,13 +26,11 @@ class TypeDef {
         } else {
             throw new Error(`Invalid input for ${this.constructor.name}: ${input}`)
         }
+        Object.defineProperty(this, 'bytes', { get: function () { return this.#bytes ??= this.constructor.serialize(this.#value, this) }, enumerable: true })
+        Object.defineProperty(this, 'value', { get: function () { return this.#value ??= this.constructor.deserialize(this.#bytes, this) }, enumerable: true })
     }
 
     consume(bytes) { return bytes.subarray(0, this.constructor.minBytesLength) }
-
-    get bytes() { return this.#bytes ??= this.constructor.serialize(this.#value, this) }
-
-    get value() { return this.#value ??= this.constructor.deserialize(this.#bytes, this) }
 
     toJSON() { return this.value ? this.value : null }
     toString() {
@@ -457,7 +455,7 @@ const XDR = {
     factory: async function (str) {
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
         if (str in this.types) return this.types[str]
-        if (str.startsWith('https://') || str.startsWith('http://')) str = await (await fetch(str)).text()
+        if (!str.includes(';')) str = await (await fetch(str)).text()
         this.types[str] = parseX(str)
         return this.types[str]
     },

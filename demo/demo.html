@@ -13,77 +13,61 @@
     <script type="module">
         import XDR from "../xdr.js"
 
-        const xCode = `const MAXUSERNAME = 32;     /* max length of a user name */
-         const MAXFILELEN = 65535;   /* max length of a file      */
-         const MAXNAMELEN = 255;     /* max length of a file name */
-
-         /*
-          * Types of files:
-          */
-         enum filekind {
-            TEXT = 0,       /* ascii data */
-            DATA = 1,       /* raw data   */
-            EXEC = 2        // executable
-         };
-
-         /*
-          * File information, per kind of file:
-          */
-         union filetype switch (filekind kind) {
-         case TEXT:
-            void;                           /* no extra information */
-         case DATA:
-            string creator<MAXNAMELEN>;     /* data creator         */
-         case EXEC:
-            string interpretor<MAXNAMELEN>; /* program interpretor  */
-         };
-
-         /*
-          * A complete file:
-          */
-         struct file {
-            string filename<MAXNAMELEN>; /* name of file    */
-            filetype type;               /* info about file */
-            string owner<MAXUSERNAME>;   /* owner of file   */
-            opaque data<MAXFILELEN>;     /* file data       */
-         };
-`
-
         const fileBytes = new Uint8Array([
-            0x00, 0x00, 0x00, 0x09, // string filename - 48
+            0x00, 0x00, 0x00, 0x09,
             0x73, 0x69, 0x6c, 0x6c,
             0x79, 0x70, 0x72, 0x6f,
             0x67, 0x00, 0x00, 0x00,
-            0x00, 0x00, 0x00, 0x02, // enum filekind - 32
-            0x00, 0x00, 0x00, 0x04, // string interpretor - 28
+            0x00, 0x00, 0x00, 0x02,
+            0x00, 0x00, 0x00, 0x04,
             0x6c, 0x69, 0x73, 0x70,
-            0x00, 0x00, 0x00, 0x04, // string owner - 20
+            0x00, 0x00, 0x00, 0x04,
             0x6a, 0x6f, 0x68, 0x6e,
-            0x00, 0x00, 0x00, 0x06, // opaque data - 12
+            0x00, 0x00, 0x00, 0x06,
             0x28, 0x71, 0x75, 0x69,
             0x74, 0x29, 0x00, 0x00
-        ])
-
-        const fileValue = {
-            filename: "sillyprog",
-            type: {
-                kind: "EXEC",
-                interpretor: "lisp"
+        ]),
+            fileValue = {
+                filename: "sillyprog",
+                type: {
+                    kind: "EXEC",
+                    interpretor: "lisp"
+                },
+                owner: "john",
+                data: [0x28, 0x71, 0x75, 0x69, 0x74, 0x29]
             },
-            owner: "john",
-            data: [0x28, 0x71, 0x75, 0x69, 0x74, 0x29]
-        }
 
-        console.log('line 77', XDR)
+            // load type definition from URL to any .X file or direct as a string of XDR type definition code 
+            // as per the XDR: External Data Representation Standard at https://datatracker.ietf.org/doc/html/rfc4506.html
 
-        const fileType = await XDR.factory(xCode)
-        console.log('line 80', fileType)
+            fileType = await XDR.factory('file.X'),
 
-        window.xdr = XDR
+            // create an instance of the type from either a Uint8Array of regular Array of byte integers 
+            fileInstanceFromBytes = new fileType(fileBytes),
 
-        window.fileType = fileType
-        window.fileBytes = fileBytes
-        window.fileValue = fileValue
+            // create an instance of the type from a live object that conforms to the type definition
+            fileInstanceFromValue = new fileType(fileValue)
+
+        console.log("From bytes: ", fileInstanceFromBytes)
+        console.log("From value: ", fileInstanceFromValue)
+
+        // serialize any conforming value to a Uint8Array of bytes
+        console.log("Serialize: ", XDR.serialize(fileValue, fileType))
+
+        // deserialize any Uint8Array of bytes to a live object that conforms to the type definition
+        console.log("Deserialize: ", XDR.deserialize(fileBytes, fileType))
+
+        // serialize any conforming value to a base64 string encoding the bytes
+        const base64Str = XDR.stringify(fileValue, fileType)
+
+        // deserialize any base64 string encoding of bytes to a live object that conforms to the type definition
+        const parseResult = XDR.parse(base64Str, fileType)
+
+        console.log("Base64 byte string: ", base64Str)
+
+        console.log("Parsed to object: ", parseResult)
+
+        console.log("JSON stringify: ", JSON.stringify(fileInstanceFromBytes))
 
     </script>
 
