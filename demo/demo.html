@@ -70,11 +70,27 @@
 
         console.log("JSON stringify: ", JSON.stringify(fileInstanceFromBytes))
 
+        // make available for inspection in browser console
+        window.XDR = XDR
 
-        document.getElementById('file-value').querySelector('pre').textContent = JSON.stringify(fileValue, null, 4)
-        document.getElementById('file-bytes').querySelector('pre').textContent = JSON.stringify(Array.from(fileBytes))
-        document.getElementById('file-type').querySelector('pre').textContent = await fetch('file.X').then(r => r.text())
 
+        const examples = {
+            'file-value': JSON.stringify(fileValue, null, 4),
+            'file-bytes': JSON.stringify(Array.from(fileBytes), null, 4),
+            'file-type': await fetch('file.X').then(r => r.text()),
+
+            'factory': `fileType = ${fileType.toString()}\n\n\n${XDR.types.typedef.toString()}`,
+            'new-from-bytes': `fileInstanceFromBytes = ${JSON.stringify({ bytes: fileInstanceFromBytes.bytes, value: fileInstanceFromBytes.value }, null, 4)}`,
+            'new-from-value': `fileInstanceFromValue = ${JSON.stringify({ bytes: fileInstanceFromValue.bytes, value: fileInstanceFromValue.value }, null, 4)}`,
+
+            'deserialize': `${JSON.stringify(XDR.deserialize(fileBytes, fileType), null, 4)}`,
+            'serialize': `${JSON.stringify(Array.from(XDR.serialize(fileValue, fileType)), null, 4)}`,
+
+            'stringify': `${JSON.stringify(XDR.stringify(fileValue, fileType), null, 4)}`,
+            'parse': `${JSON.stringify(XDR.parse(base64Str, fileType), null, 4)}`
+
+        }
+        for (const [id, textContent] of Object.entries(examples)) document.getElementById(id).querySelector('pre').textContent = textContent
 
     </script>
 
@@ -108,24 +124,50 @@
         </details>
         <details open>
             <summary>
-                <h2>Operations</h2>
+                <h2>Object Creation</h2>
             </summary>
-            <section id="file-value">
+            <section id="factory">
                 <p>Load the type definition from an .X file to create a type class</p>
                 <code class="example">fileType = await XDR.factory('file.X')</code>
                 <pre class="result"></pre>
             </section>
-            <section id="file-bytes">
+            <section id="new-from-bytes">
                 <p>Create an instance of the type from an array of bytes</p>
                 <code class="example">fileInstanceFromBytes = new fileType(fileBytes)</code>
                 <pre class="result"></pre>
             </section>
-            <section id="file-type">
+            <section id="new-from-value">
                 <p>Create an instance of the type from a conforming value</p>
                 <code class="example">fileInstanceFromValue = new fileType(fileValue)</code>
                 <pre class="result"></pre>
             </section>
         </details>
+        <details open>
+            <summary>
+                <h2>Operations</h2>
+            </summary>
+            <section id="deserialize">
+                <p>Construct a value from a Uint8Array of bytes</p>
+                <code class="example">XDR.deserialize(fileBytes, fileType)</code>
+                <pre class="result"></pre>
+            </section>
+            <section id="serialize">
+                <p>Serialize a conforming value to a Uint8Array of XDR bytes</p>
+                <code class="example">XDR.serialize(fileValue, fileType)</code>
+                <pre class="result"></pre>
+            </section>
+            <section id="stringify">
+                <p>Stringify a conforming value to a base64 encoded string of bytes</p>
+                <code class="example">const base64Str = XDR.stringify(fileValue, fileType)</code>
+                <pre class="result"></pre>
+            </section>
+            <section id="parse">
+                <p>Parse a base64 encoded string of bytes into a conforming value</p>
+                <code class="example">XDR.parse(base64str, fileType)</code>
+                <pre class="result"></pre>
+            </section>
+        </details>
+
     </main>
     <main>
 
