@@ -71,13 +71,8 @@
         console.log("JSON stringify: ", JSON.stringify(fileInstanceFromBytes))
 
 
-        document.getElementById('file-value').querySelector('code').textContent = 'fileValue'
         document.getElementById('file-value').querySelector('pre').textContent = JSON.stringify(fileValue, null, 4)
-
-        document.getElementById('file-bytes').querySelector('code').textContent = 'fileBytes'
         document.getElementById('file-bytes').querySelector('pre').textContent = JSON.stringify(Array.from(fileBytes))
-
-        document.getElementById('file-type').querySelector('code').textContent = 'file.X'
         document.getElementById('file-type').querySelector('pre').textContent = await fetch('file.X').then(r => r.text())
 
 
@@ -97,25 +92,40 @@
             </summary>
             <section id="file-value">
                 <p>An object conforming to the defined type</p>
-                <code class="example">Example Code</code>
-                <pre class="result">Result output</pre>
+                <code class="example">fileValue</code>
+                <pre class="result"></pre>
             </section>
             <section id="file-bytes">
                 <p>An array of raw byte data</p>
-                <code class="example">Example Code</code>
-                <pre class="result">Result output</pre>
+                <code class="example">fileBytes</code>
+                <pre class="result"></pre>
             </section>
             <section id="file-type">
                 <p>A string of XDR type definition language contained in an .X file</p>
-                <code class="example">Example Code</code>
-                <pre class="result">Result output</pre>
+                <code class="example">file.X</code>
+                <pre class="result"></pre>
             </section>
-
         </details>
-
-
-
-
+        <details open>
+            <summary>
+                <h2>Operations</h2>
+            </summary>
+            <section id="file-value">
+                <p>Load the type definition from an .X file to create a type class</p>
+                <code class="example">fileType = await XDR.factory('file.X')</code>
+                <pre class="result"></pre>
+            </section>
+            <section id="file-bytes">
+                <p>Create an instance of the type from an array of bytes</p>
+                <code class="example">fileInstanceFromBytes = new fileType(fileBytes)</code>
+                <pre class="result"></pre>
+            </section>
+            <section id="file-type">
+                <p>Create an instance of the type from a conforming value</p>
+                <code class="example">fileInstanceFromValue = new fileType(fileValue)</code>
+                <pre class="result"></pre>
+            </section>
+        </details>
     </main>
     <main>
 

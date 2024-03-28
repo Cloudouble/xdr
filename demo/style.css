@@ -97,6 +97,10 @@ main {
             color: green;
             height: 17em;
             overflow: auto;
+
+            &:empty {
+                display: none;
+            }
         }
 
         &>code {
