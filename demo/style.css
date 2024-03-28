@@ -69,6 +69,16 @@ main {
     margin: 2em;
     border-top: 1px solid grey;
 
+    details {
+        summary {
+            cursor: pointer;
+
+            h2 {
+                display: inline-block;
+            }
+        }
+    }
+
     section {
         margin: 2em;
         border-top: 1px solid grey;

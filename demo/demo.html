@@ -70,6 +70,17 @@
 
         console.log("JSON stringify: ", JSON.stringify(fileInstanceFromBytes))
 
+
+        document.getElementById('file-value').querySelector('code').textContent = 'fileValue'
+        document.getElementById('file-value').querySelector('pre').textContent = JSON.stringify(fileValue, null, 4)
+
+        document.getElementById('file-bytes').querySelector('code').textContent = 'fileBytes'
+        document.getElementById('file-bytes').querySelector('pre').textContent = JSON.stringify(Array.from(fileBytes))
+
+        document.getElementById('file-type').querySelector('code').textContent = 'file.X'
+        document.getElementById('file-type').querySelector('pre').textContent = await fetch('file.X').then(r => r.text())
+
+
     </script>
 
 </head>
@@ -79,6 +90,33 @@
         <h1>SimpleXDR Demo Page</h1>
         <p>Using the <a href="https://github.com/cloudouble/simple-xdr">SimpleXDR</a> library</p>
     </header>
+    <main>
+        <details>
+            <summary>
+                <h2>Ingredients</h2>
+            </summary>
+            <section id="file-value">
+                <p>An object conforming to the defined type</p>
+                <code class="example">Example Code</code>
+                <pre class="result">Result output</pre>
+            </section>
+            <section id="file-bytes">
+                <p>An array of raw byte data</p>
+                <code class="example">Example Code</code>
+                <pre class="result">Result output</pre>
+            </section>
+            <section id="file-type">
+                <p>A string of XDR type definition language contained in an .X file</p>
+                <code class="example">Example Code</code>
+                <pre class="result">Result output</pre>
+            </section>
+
+        </details>
+
+
+
+
+    </main>
     <main>
 
 
