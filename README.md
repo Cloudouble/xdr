@@ -35,6 +35,8 @@ A library for encoding and decoding XDR data within the browser or browser-like 
             // load type definition from URL to any .X file or direct as a string of XDR type definition code 
             // as per the XDR: External Data Representation Standard 
             // at https://datatracker.ietf.org/doc/html/rfc4506.html
+            // Note that type definition classes created with the `factory` method are cached once compiled
+            // so remote files are only ever fetched once
 
             fileType = await XDR.factory('demo/file.X'),
 
