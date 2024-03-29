@@ -232,6 +232,7 @@ const rx = {
     struct: /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     union: /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g, namespace: /^namespace\s+([\w]+)\s*\{/,
+    includes: /\%\#include\s+\".+\"/g,
     unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
 }
 
@@ -474,7 +475,8 @@ function parseX(xCode) {
 
 const XDR = {
     createEnum,
-    factory: async function (str, namespace) {
+    factory: async function (str, options) {
+        const namespace = options?.namespace, includes = options?.includes
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
         let typeKey, isURL = !str.includes(';')
         if (isURL) {
@@ -491,6 +493,16 @@ const XDR = {
             return this.types[typeKey]
         }
         if (isURL) str = await (await fetch(str)).text()
+        if (typeof includes === 'function') {
+            let includesMatches = Array.from(str.matchAll(rx.includes))
+            // while (includesMatches.length) {
+            for (const includeMatch of includesMatches) {
+                const includeURL = includes(includeMatch[0]).replace(/^\s*\%\#include\s*/, '').trim().replaceAll('"', '')
+                const includeText = await (await fetch(includeURL)).text()
+                str = str.replace(includeMatch[0], `\n\n${includeText}\n\n`)
+            }
+            // }
+        }
         const typeClass = parseX(str)
         if (namespace) typeClass.namespace = namespace
         if (typeClass.namespace) {

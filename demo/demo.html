@@ -75,7 +75,9 @@
 
         const stellar = {
             types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-types.x'),
-            // transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-transaction.x')
+            transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-transaction.x', {
+                includes: match => match.trim().replace('.h', '.x').replace('xdr/', 'https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/').trim()
+            })
         }
 
         window.stellar = stellar
