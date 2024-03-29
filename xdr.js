@@ -304,8 +304,11 @@ function parseX(xCode) {
         for (const condition of enumBody.split(',')) {
             let [name, value] = condition.split('=').map(s => s.trim())
             if (!name || !value) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
-            value = parseInt(value, value[0] === '0' && value[1] !== '.' && value[1] !== 'x' ? 8 : undefined)
-            if (!Number.isInteger(value)) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
+            let intValue = parseInt(value, value[0] === '0' && value[1] !== '.' && value[1] !== 'x' ? 8 : undefined)
+            if (!Number.isInteger(intValue) && (value in constants)) intValue = constants[value]
+            if (!Number.isInteger(intValue)) for (const en in enums) if (enums[en].indexOf(value) > -1) { intValue = enums[en].indexOf(value); break }
+            if (!Number.isInteger(intValue)) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
+            value = intValue
             body[value] = name
         }
         enums[enumName] = body
