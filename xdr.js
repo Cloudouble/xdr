@@ -34,7 +34,7 @@ class TypeDef {
 
     consume(bytes) { return bytes.subarray(0, this.constructor.minBytesLength) }
 
-    toJSON() { return this.value ? this.value : null }
+    toJSON() { return (this.value != undefined) ? this.value : null }
     toString() {
         try {
             return this.value ? JSON.stringify(this.value) : 'null'
@@ -206,6 +206,10 @@ class stringType extends TypeDef {
     }
 
     get maxLength() { return this.#maxLength }
+
+    toString() {
+        return this.value ?? ''
+    }
 
 }
 
@@ -386,7 +390,17 @@ function parseX(xCode) {
 
         static namespace = namespace
 
-        static manifest = { entry, constants, enums, typedefs, unions, structs }
+        static manifest = {
+            namespace, entry, constants, enums, typedefs, unions, structs,
+            toJSON: function () {
+                const retval = { ...this }
+                for (const structName in { ...retval.structs }) {
+                    retval.structs[structName] ||= {}
+                    for (const [k, v] of retval.structs[structName].entries()) retval.structs[structName][k] = v
+                }
+                return retval
+            }
+        }
 
         static serialize(value, instance, declaration) {
             let type = declaration?.type ?? this.manifest.entry

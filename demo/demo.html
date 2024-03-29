@@ -73,6 +73,11 @@
         // make available for inspection in browser console
         window.XDR = XDR
 
+        const stellar = {
+            types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-types.x')
+        }
+
+        window.stellar = stellar
 
         const examples = {
             'file-value': JSON.stringify(fileValue, null, 4),
@@ -80,17 +85,22 @@
             'file-type': await fetch('file.X').then(r => r.text()),
 
             'factory': `fileType = ${fileType.toString()}\n\n\n${XDR.types.typedef.toString()}`,
-            'new-from-bytes': `fileInstanceFromBytes = ${JSON.stringify({ bytes: fileInstanceFromBytes.bytes, value: fileInstanceFromBytes.value }, null, 4)}`,
-            'new-from-value': `fileInstanceFromValue = ${JSON.stringify({ bytes: fileInstanceFromValue.bytes, value: fileInstanceFromValue.value }, null, 4)}`,
+            'new-from-bytes': `fileInstanceFromBytes = ${JSON.stringify({ ...fileInstanceFromBytes, constructor: { ...fileInstanceFromBytes.constructor } }, null, 4)}`,
+            'new-from-value': `fileInstanceFromValue = ${JSON.stringify({ ...fileInstanceFromValue, constructor: { ...fileInstanceFromValue.constructor } }, null, 4)}`,
 
             'deserialize': `${JSON.stringify(XDR.deserialize(fileBytes, fileType), null, 4)}`,
             'serialize': `${JSON.stringify(Array.from(XDR.serialize(fileValue, fileType)), null, 4)}`,
 
             'stringify': `${JSON.stringify(XDR.stringify(fileValue, fileType), null, 4)}`,
-            'parse': `${JSON.stringify(XDR.parse(base64Str, fileType), null, 4)}`
+            'parse': `${JSON.stringify(XDR.parse(base64Str, fileType), null, 4)}`,
+
+            'stellar-types': JSON.stringify(stellar.types.manifest, null, 4)
 
         }
         for (const [id, textContent] of Object.entries(examples)) document.getElementById(id).querySelector('pre').textContent = textContent
+
+
+
 
     </script>
 
@@ -122,7 +132,7 @@
                 <pre class="result"></pre>
             </section>
         </details>
-        <details open>
+        <details>
             <summary>
                 <h2>Object Creation</h2>
             </summary>
@@ -142,7 +152,7 @@
                 <pre class="result"></pre>
             </section>
         </details>
-        <details open>
+        <details>
             <summary>
                 <h2>Operations</h2>
             </summary>
@@ -168,6 +178,45 @@
             </section>
         </details>
 
+
+        <details open>
+            <summary>
+                <h2>Stellar Specific Features</h2>
+                <p>This section includes specific non-standard extensions that are required to correctly work
+                    with data types used by the <a href="https://stellar.org">Stellar network</a>. The XDR definition
+                    files are sourced from <a
+                        href="https://github.com/stellar/stellar-xdr">https://github.com/stellar/stellar-xdr</a>.
+                </p>
+                <p>The generated classes are shown as the value of their `manifest` property, this is a
+                    generated map of the contained data structures within the type class and can be cross-referenced
+                    with the .X file code.
+                </p>
+            </summary>
+            <section id="stellar-types">
+                <h3>Stellar-types.x</h3>
+                <p>Demonstrates support for parsing file namespace and dependent enums.</p>
+                <code
+                    class="example">fileType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-types.x')</code>
+                <pre class="result"></pre>
+            </section>
+            <section id="serialize">
+                <p>Serialize a conforming value to a Uint8Array of XDR bytes</p>
+                <code class="example">XDR.serialize(fileValue, fileType)</code>
+                <pre class="result"></pre>
+            </section>
+            <section id="stringify">
+                <p>Stringify a conforming value to a base64 encoded string of bytes</p>
+                <code class="example">const base64Str = XDR.stringify(fileValue, fileType)</code>
+                <pre class="result"></pre>
+            </section>
+            <section id="parse">
+                <p>Parse a base64 encoded string of bytes into a conforming value</p>
+                <code class="example">XDR.parse(base64str, fileType)</code>
+                <pre class="result"></pre>
+            </section>
+        </details>
+
+
     </main>
     <main>
 
@@ -178,8 +227,8 @@
 
     </main>
     <footer>
-        <p>Created as the deliverable for Milestone Two of the <a
-                href="https://github.com/Cloudouble/stellar-js-worker-sdk">Stellar JavaScript Worker SDK</a></p>
+        <p>Created as part of the <a href="https://github.com/Cloudouble/stellar-js-worker-sdk">Stellar JavaScript
+                Worker SDK</a></p>
     </footer>
 
 </body>
