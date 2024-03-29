@@ -455,9 +455,17 @@ const XDR = {
     factory: async function (str) {
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
         if (str in this.types) return this.types[str]
-        if (!str.includes(';')) str = await (await fetch(str)).text()
-        this.types[str] = parseX(str)
-        return this.types[str]
+        let typeKey
+        if (str.includes(';')) {
+            typeKey = Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
+                x => (('00' + x.toString(16)).slice(-2))).join('')
+        } else {
+            str = new URL(str, document.baseURI).href
+            typeKey = str
+            str = await (await fetch(str)).text()
+        }
+        this.types[typeKey] = parseX(str)
+        return this.types[typeKey]
     },
     deserialize: function (bytes, typedef) {
         typedef = resolveTypeDef(typedef)
