@@ -3,6 +3,8 @@ class TypeDef {
     #bytes
     #value
 
+    static namespace
+
     static additionalArgs = []
     static minBytesLength = 0
 
@@ -225,7 +227,7 @@ const rx = {
     'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
     struct: /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     union: /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
-    typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g,
+    typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g, namespace: /^namespace\s+([\w]+)\s*\{/,
     unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
 }
 
@@ -286,6 +288,7 @@ function parseX(xCode) {
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
+    let namespace = (xCode.match(rx.namespace) ?? [])[1]
 
     for (const m of xCode.matchAll(rx.const)) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
@@ -381,6 +384,8 @@ function parseX(xCode) {
 
     const typeClass = class extends TypeDef {
 
+        static namespace = namespace
+
         static manifest = { entry, constants, enums, typedefs, unions, structs }
 
         static serialize(value, instance, declaration) {
@@ -455,20 +460,30 @@ function parseX(xCode) {
 
 const XDR = {
     createEnum,
-    factory: async function (str) {
+    factory: async function (str, namespace) {
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
-        if (str in this.types) return this.types[str]
-        let typeKey
-        if (str.includes(';')) {
-            typeKey = Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
-                x => (('00' + x.toString(16)).slice(-2))).join('')
-        } else {
+        let typeKey, isURL = !str.includes(';')
+        if (isURL) {
             str = new URL(str, document.baseURI).href
             typeKey = str
-            str = await (await fetch(str)).text()
+        } else {
+            typeKey = Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
+                x => (('00' + x.toString(16)).slice(-2))).join('')
         }
-        this.types[typeKey] = parseX(str)
-        return this.types[typeKey]
+        if (namespace) {
+            this.types[namespace] ||= {}
+            if (typeKey in this.types[namespace]) return this.types[namespace][typeKey]
+        } else if (typeKey in this.types) {
+            return this.types[typeKey]
+        }
+        if (isURL) str = await (await fetch(str)).text()
+        const typeClass = parseX(str)
+        if (namespace) typeClass.namespace = namespace
+        if (typeClass.namespace) {
+            this.types[typeClass.namespace] ||= {}
+            return this.types[typeClass.namespace][typeKey] = typeClass
+        }
+        return this.types[typeKey] = typeClass
     },
     deserialize: function (bytes, typedef) {
         typedef = resolveTypeDef(typedef)
