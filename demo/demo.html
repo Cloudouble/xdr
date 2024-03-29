@@ -74,7 +74,8 @@
         window.XDR = XDR
 
         const stellar = {
-            types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-types.x')
+            types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-types.x'),
+            // transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-transaction.x')
         }
 
         window.stellar = stellar
@@ -94,7 +95,8 @@
             'stringify': `${JSON.stringify(XDR.stringify(fileValue, fileType), null, 4)}`,
             'parse': `${JSON.stringify(XDR.parse(base64Str, fileType), null, 4)}`,
 
-            'stellar-types': JSON.stringify(stellar.types.manifest, null, 4)
+            'stellar-types': JSON.stringify(stellar.types.manifest, null, 4),
+            // 'stellar-transaction': JSON.stringify(stellar.transaction.manifest, null, 4)
 
         }
         for (const [id, textContent] of Object.entries(examples)) document.getElementById(id).querySelector('pre').textContent = textContent
