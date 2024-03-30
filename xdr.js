@@ -494,14 +494,20 @@ const XDR = {
         }
         if (isURL) str = await (await fetch(str)).text()
         if (typeof includes === 'function') {
+            const urlsFetched = {}
             let includesMatches = Array.from(str.matchAll(rx.includes))
-            // while (includesMatches.length) {
-            for (const includeMatch of includesMatches) {
-                const includeURL = includes(includeMatch[0]).replace(/^\s*\%\#include\s*/, '').trim().replaceAll('"', '')
-                const includeText = await (await fetch(includeURL)).text()
-                str = str.replace(includeMatch[0], `\n\n${includeText}\n\n`)
+            while (includesMatches.length) {
+                for (const includeMatch of includesMatches) {
+                    const includeURL = includes(includeMatch[0]).replace(/^\s*\%\#include\s*/, '').trim().replaceAll('"', '')
+                    if (urlsFetched[includeURL]) {
+                        str = str.replace(includeMatch[0], `\n\n`)
+                    } else {
+                        urlsFetched[includeURL] = true
+                        str = str.replace(includeMatch[0], `\n\n${await (await fetch(includeURL)).text()}\n\n`)
+                    }
+                }
+                includesMatches = Array.from(str.matchAll(rx.includes))
             }
-            // }
         }
         const typeClass = parseX(str)
         if (namespace) typeClass.namespace = namespace
