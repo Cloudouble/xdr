@@ -75,9 +75,12 @@
 
         const stellar = {
             types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-types.x'),
-            transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-transaction.x', {
-                includes: match => match.trim().replace('.h', '.x').replace('xdr/', 'https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/').trim()
-            })
+            contract: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-contract.x'),
+            contractConfigSetting: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-contract-config-setting.x'),
+            ledgerEntries: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-ledger-entries.x'),
+            // transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-transaction.x', {
+            //     includes: match => match.trim().replace('.h', '.x').replace('xdr/', 'https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/').trim()
+            // })
         }
 
         window.stellar = stellar
@@ -98,6 +101,9 @@
             'parse': `${JSON.stringify(XDR.parse(base64Str, fileType), null, 4)}`,
 
             'stellar-types': JSON.stringify(stellar.types.manifest, null, 4),
+            'stellar-contract': JSON.stringify(stellar.contract.manifest, null, 4),
+            'stellar-contract-config-setting': JSON.stringify(stellar.contractConfigSetting.manifest, null, 4),
+            'stellar-ledger-entries': JSON.stringify(stellar.ledgerEntries.manifest, null, 4),
             // 'stellar-transaction': JSON.stringify(stellar.transaction.manifest, null, 4)
 
         }
@@ -193,29 +199,36 @@
                 </p>
                 <p>The generated classes are shown as the value of their `manifest` property, this is a
                     generated map of the contained data structures within the type class and can be cross-referenced
-                    with the .X file code.
+                    with the .X file code. Once class is created per entry .X type definition file.
                 </p>
             </summary>
             <section id="stellar-types">
                 <h3>Stellar-types.x</h3>
-                <p>Demonstrates support for parsing file namespace and dependent enums.</p>
+                <p>Does not create a valid struct itself, but is included in other files. Shown here to demonstrate
+                    correct parsing.</p>
                 <code
-                    class="example">fileType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-types.x')</code>
+                    class="example">stellarTypes = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-types.x')</code>
                 <pre class="result"></pre>
             </section>
-            <section id="serialize">
-                <p>Serialize a conforming value to a Uint8Array of XDR bytes</p>
-                <code class="example">XDR.serialize(fileValue, fileType)</code>
+            <section id="stellar-contract">
+                <h3>Stellar-contract.x</h3>
+                <p></p>
+                <code
+                    class="example">stellarContractType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-contract.x')</code>
                 <pre class="result"></pre>
             </section>
-            <section id="stringify">
-                <p>Stringify a conforming value to a base64 encoded string of bytes</p>
-                <code class="example">const base64Str = XDR.stringify(fileValue, fileType)</code>
+            <section id="stellar-contract-config-setting">
+                <h3>Stellar-contract-config-setting.x</h3>
+                <p></p>
+                <code
+                    class="example">stellarContractConfigSettingType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-contract-config-setting.x')</code>
                 <pre class="result"></pre>
             </section>
-            <section id="parse">
-                <p>Parse a base64 encoded string of bytes into a conforming value</p>
-                <code class="example">XDR.parse(base64str, fileType)</code>
+            <section id="stellar-ledger-entries">
+                <h3>Stellar-ledger-entries.x</h3>
+                <p></p>
+                <code
+                    class="example">stellarLedgerEntriesType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/Stellar-ledger-entries.x')</code>
                 <pre class="result"></pre>
             </section>
         </details>
