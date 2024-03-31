@@ -95,7 +95,7 @@ main {
             padding: 1em;
             outline: 1px dashed green;
             color: green;
-            height: 17em;
+            height: 37em;
             overflow: auto;
 
             &:empty {

@@ -326,7 +326,6 @@ function parseX(xCode) {
     const buildStructFromMatch = function (m) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', structName = isTypeDef ? m[4] : m[1], map = new Map(), structBody = isTypeDef ? m[3] : m[2]
         for (let declaration of structBody.split('\n')) {
-            console.log('line 329', declaration)
             declaration = declaration.trim()
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
             if ((!declaration) || (declaration[0] === ';')) continue
@@ -376,7 +375,6 @@ function parseX(xCode) {
     }
 
     for (const m of xCode.matchAll(rx.struct)) {
-        console.log('line 379', m)
         const [structName, map] = buildStructFromMatch(m)
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
