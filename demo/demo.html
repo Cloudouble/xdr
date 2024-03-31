@@ -74,7 +74,7 @@
         window.XDR = XDR
 
         const stellar = {
-            // scp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x'),
+            scp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x'),
             // ['contract-config-setting']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-config-setting.x'),
             // ['contract-env-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-env-meta.x'),
             // ['contract-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-meta.x'),
@@ -87,7 +87,7 @@
             // transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
             //     includes: match => match.trim().replace('.h', '.x').replace('xdr/', 'https://raw.githubusercontent.com/stellar/stellar-xdr/cdc339f5e74a75e8e558fd1a853397da71f1659a/').trim()
             // }),
-            types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
+            // types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
         }
 
         window.stellar = stellar
@@ -111,9 +111,6 @@
 
         }
         for (const [id, textContent] of Object.entries(examples)) document.getElementById(id).querySelector('pre').textContent = textContent
-
-        console.log('line 115', stellar)
-        console.log('line 116', examples)
 
     </script>
 

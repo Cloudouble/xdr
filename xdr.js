@@ -232,8 +232,7 @@ const rx = {
     struct: /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     union: /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g, namespace: /^namespace\s+([\w]+)\s*\{/,
-    includes: /\%\#include\s+\".+\"/g,
-    unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
+    includes: /\%\#include\s+\".+\"/g, unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
 }
 
 const parseTypeLengthModeIdentifier = function (declaration, constants) {
@@ -476,7 +475,8 @@ function parseX(xCode) {
 const XDR = {
     createEnum,
     factory: async function (str, options) {
-        const namespace = options?.namespace, includes = options?.includes
+        const namespace = options?.namespace
+        let includes = options?.includes ?? this.options.includes, baseUri = document.baseURI
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
         let typeKey, isURL = !str.includes(';')
         if (isURL) {
@@ -492,13 +492,16 @@ const XDR = {
         } else if (typeKey in this.types) {
             return this.types[typeKey]
         }
-        if (isURL) str = await (await fetch(str)).text()
-        if (typeof includes === 'function') {
+        if (isURL) {
+            baseUri = new URL(str, baseUri).href
+            str = await (await fetch(str)).text()
+        }
+        let includesMatches = Array.from(str.matchAll(rx.includes))
+        if (includesMatches.length) {
             const urlsFetched = {}
-            let includesMatches = Array.from(str.matchAll(rx.includes))
             while (includesMatches.length) {
                 for (const includeMatch of includesMatches) {
-                    const includeURL = includes(includeMatch[0]).replace(/^\s*\%\#include\s*/, '').trim().replaceAll('"', '')
+                    const includeURL = includes(includeMatch[0], baseUri)
                     if (urlsFetched[includeURL]) {
                         str = str.replace(includeMatch[0], `\n\n`)
                     } else {
@@ -537,6 +540,9 @@ const XDR = {
         typedef: TypeDef,
         int: intType, hyper: hyperType, float: floatType, double: doubleType,
         opaque: opaqueType, string: stringType, void: voidType
+    },
+    options: {
+        includes: (match, baseUri) => new URL(`${match.slice(11, -1).trim().slice(4, -1)}x`, (baseUri ?? document.baseURI)).href
     }
 }
 XDR.types.bool = XDR.createEnum([false, true])
