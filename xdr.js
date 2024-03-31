@@ -231,6 +231,7 @@ const rx = {
     'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
     struct: /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     union: /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
+    structInternal: /struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g, unionInternal: /union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g, namespace: /^namespace\s+([\w]+)\s*\{/,
     includes: /\%\#include\s+\".+\"/g, unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
 }
@@ -324,6 +325,17 @@ function parseX(xCode) {
 
     const buildStructFromMatch = function (m) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', structName = isTypeDef ? m[4] : m[1], map = new Map(), structBody = isTypeDef ? m[3] : m[2]
+
+        // for (const um of structBody.matchAll(rx.unionInternal)) {
+        //     console.log('line 329', um)
+        //     const [unionName, discriminant, arms] = buildUnionFromMatch(um)
+
+        //     console.log('line 333', unionName, discriminant, arms)
+
+        //     // unions[unionName] = { discriminant, arms }
+        //     // structBody = structBody.replace(um[0], '').replace(rx.blankLines, '').trim()
+        // }
+
         for (let declaration of structBody.split('\n')) {
             declaration = declaration.trim()
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
@@ -378,6 +390,40 @@ function parseX(xCode) {
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
+
+
+    // typedef enum {    /* using typedef */
+    //         FALSE = 0,
+    //         TRUE = 1
+    //      } bool;
+
+    //     enum bool {       /* preferred alternative */
+    //     FALSE = 0,
+    //     TRUE = 1
+    //  };    
+
+    // type-name *identifier;
+
+    // This is equivalent to the following union:
+
+    //       union switch (bool opted) {
+    //       case TRUE:
+    //          type-name element;
+    //       case FALSE:
+    //          void;
+    //       } identifier;    
+
+    // const SCPStatement = {
+    //     nodeID: 'abc',
+    //     slotIndex: 1,
+    //     pledges: {
+    //         type: 'SCP_ST_PREPARE',
+    //         prepare: {
+    //             quorumSetHash: '',
+    //             ballot: {},
+    //         }
+    //     }
+    // }
 
     let entry
     const dependedTypes = new Set()
