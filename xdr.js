@@ -294,11 +294,14 @@ function parseX(xCode) {
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
     let namespace = (xCode.match(rx.namespace) ?? [])[1]
-
     for (const m of xCode.matchAll(rx.const)) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
+
+
+    // NEEDS a flatten process HERE to take out all inner structs / unions and put them in the top-level as typedefs 
+
 
     for (const t of xCode.matchAll(rx.typedef)) {
         const typeObj = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
@@ -325,17 +328,6 @@ function parseX(xCode) {
 
     const buildStructFromMatch = function (m) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', structName = isTypeDef ? m[4] : m[1], map = new Map(), structBody = isTypeDef ? m[3] : m[2]
-
-        // for (const um of structBody.matchAll(rx.unionInternal)) {
-        //     console.log('line 329', um)
-        //     const [unionName, discriminant, arms] = buildUnionFromMatch(um)
-
-        //     console.log('line 333', unionName, discriminant, arms)
-
-        //     // unions[unionName] = { discriminant, arms }
-        //     // structBody = structBody.replace(um[0], '').replace(rx.blankLines, '').trim()
-        // }
-
         for (let declaration of structBody.split('\n')) {
             declaration = declaration.trim()
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
@@ -392,26 +384,6 @@ function parseX(xCode) {
     }
 
 
-    // typedef enum {    /* using typedef */
-    //         FALSE = 0,
-    //         TRUE = 1
-    //      } bool;
-
-    //     enum bool {       /* preferred alternative */
-    //     FALSE = 0,
-    //     TRUE = 1
-    //  };    
-
-    // type-name *identifier;
-
-    // This is equivalent to the following union:
-
-    //       union switch (bool opted) {
-    //       case TRUE:
-    //          type-name element;
-    //       case FALSE:
-    //          void;
-    //       } identifier;    
 
     // const SCPStatement = {
     //     nodeID: 'abc',
@@ -424,6 +396,47 @@ function parseX(xCode) {
     //         }
     //     }
     // }
+
+    // struct SCPStatement
+    // {
+    //     NodeID nodeID;    // v
+    //     uint64 slotIndex; // i
+
+    //     union switch (SCPStatementType type)
+    //     {
+    //     case SCP_ST_PREPARE:
+    //         struct
+    //         {
+    //             Hash quorumSetHash;       // D
+    //             SCPBallot ballot;         // b
+    //             SCPBallot* prepared;      // p
+    //             SCPBallot* preparedPrime; // p'
+    //             uint32 nC;                // c.n
+    //             uint32 nH;                // h.n
+    //         } prepare;
+    //     case SCP_ST_CONFIRM:
+    //         struct
+    //         {
+    //             SCPBallot ballot;   // b
+    //             uint32 nPrepared;   // p.n
+    //             uint32 nCommit;     // c.n
+    //             uint32 nH;          // h.n
+    //             Hash quorumSetHash; // D
+    //         } confirm;
+    //     case SCP_ST_EXTERNALIZE:
+    //         struct
+    //         {
+    //             SCPBallot commit;         // c
+    //             uint32 nH;                // h.n
+    //             Hash commitQuorumSetHash; // D used before EXTERNALIZE
+    //         } externalize;
+    //     case SCP_ST_NOMINATE:
+    //         SCPNomination nominate;
+    //     }
+    //     pledges;
+    // };
+
+
 
     let entry
     const dependedTypes = new Set()
