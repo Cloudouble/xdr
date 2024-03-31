@@ -299,10 +299,6 @@ function parseX(xCode) {
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
 
-
-    // NEEDS a flatten process HERE to take out all inner structs / unions and put them in the top-level as typedefs 
-
-
     for (const t of xCode.matchAll(rx.typedef)) {
         const typeObj = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
         typedefs[typeObj.identifier] = typeObj
@@ -325,6 +321,12 @@ function parseX(xCode) {
         enums[enumName] = body
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
+
+
+
+    // NEEDS a recursive process here to take out all anonymous strcts / unions and put them in the top-level as typedefs
+
+
 
     const buildStructFromMatch = function (m) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', structName = isTypeDef ? m[4] : m[1], map = new Map(), structBody = isTypeDef ? m[3] : m[2]
