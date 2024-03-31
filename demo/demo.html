@@ -202,7 +202,17 @@
                 </p>
                 <p>The generated classes are shown as the value of their `manifest` property, this is a
                     generated map of the contained data structures within the type class and can be cross-referenced
-                    with the .X file code. Once class is created per entry .X type definition file.
+                    with the .X file code. Once class is created per entry .X type definition file. The `factory`
+                    function shown below do
+                    NOT product this output, but rather produce a type class that reflects the structures outlined in
+                    the manifest shown. The type classes produced can be used as part of the deserialize, serialize,
+                    parse, stringify
+                    operations and the object creation processes as shown above.
+                </p>
+                <p>For real-world usage, it be advisable to copy the .x files locally and link to your own copies,
+                    rather than
+                    using the Github file links as shown here, these Github links are only useful for learning and rapid
+                    prototyping.
                 </p>
             </summary>
             <section id="stellar-scp">
