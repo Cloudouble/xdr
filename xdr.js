@@ -370,25 +370,26 @@ function parseX(xCode) {
 
 
     let anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)),
-        anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
+        anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat)),
+        anonymousStructCounter = 0, anonymousUnionCounter = 0
     console.log('line 373', anonymousFlatStructMatches.length, anonymousFlatUnionMatches.length)
     while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
         for (const m of anonymousFlatStructMatches) {
-            const [structName, map] = buildStructFromMatch(m)
+            const [identifier, map] = buildStructFromMatch(m), structName = `anonymousStructType${++anonymousStructCounter}`
             structs[structName] = map
             xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
         }
         for (const m of anonymousFlatUnionMatches) {
-            const [unionName, discriminant, arms] = buildUnionFromMatch(m)
+            const [identifier, discriminant, arms] = buildUnionFromMatch(m), unionName = `anonymousUnionType${++anonymousUnionCounter}`
             unions[unionName] = { discriminant, arms }
             xCode = xCode.replace(m[0], `\n${unionName} ${identifier};\n`).replace(rx.blankLines, '').trim()
         }
         anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat))
         anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
 
-        console.log('line 389', anonymousFlatStructMatches.length, anonymousFlatUnionMatches.length)
+        console.log('line 390', anonymousFlatStructMatches.length, anonymousFlatUnionMatches.length)
 
-        break
+        // break
     }
 
 
