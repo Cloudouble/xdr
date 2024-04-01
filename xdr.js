@@ -410,9 +410,11 @@ function parseX(xCode) {
 
         static namespace = namespace
 
+        static entry = entry
+
         static manifest = {
-            namespace: this.namespace,
-            entry, constants, enums, typedefs, unions, structs,
+            namespace: this.namespace, entry: this.entry,
+            constants, enums, typedefs, unions, structs,
             toJSON: function () {
                 const retval = { ...this }
                 for (const structName in { ...retval.structs }) {
@@ -496,7 +498,7 @@ function parseX(xCode) {
 const XDR = {
     createEnum,
     factory: async function (str, options) {
-        const namespace = options?.namespace
+        const namespace = options?.namespace, entry = options?.entry
         let includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? document.baseURI
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
         let typeKey, isURL = !str.includes(';')
@@ -534,6 +536,7 @@ const XDR = {
             }
         }
         const typeClass = parseX(str)
+        if (entry) typeClass.entry = typeClass.manifest.entry = entry
         if (namespace) typeClass.namespace = namespace
         if (typeClass.namespace) {
             this.types[typeClass.namespace] ||= {}

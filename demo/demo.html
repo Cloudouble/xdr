@@ -74,7 +74,7 @@
         window.XDR = XDR
 
         const stellar = {
-            scp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x'),
+            scp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x', { entry: 'SCPEnvelope' }),
             ['contract-config-setting']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-config-setting.x'),
             ['contract-env-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-env-meta.x'),
             ['contract-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-meta.x'),
