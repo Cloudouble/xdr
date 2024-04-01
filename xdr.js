@@ -462,9 +462,7 @@ function parseX(xCode) {
             if (type in XDR.types) {
                 result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
             } else if (type in this.manifest.typedefs) {
-                console.log('line 462', type, result, bytes, { ...this.manifest.typedefs[type], identifier: declaration.identifier })
                 result = this.deserialize(bytes, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
-                console.log('line 464', type, result, bytes, { ...this.manifest.typedefs[type], identifier: declaration.identifier })
             } else if (type in this.manifest.structs) {
                 const value = {}
                 let byteLength = 0, entryResult
@@ -485,7 +483,7 @@ function parseX(xCode) {
                 const armManifest = unionManifest.arms[discriminantInstance.identifier],
                     armValue = this.deserialize(newBytes, undefined, armManifest, true)
 
-                console.log('line 485', armManifest, armValue, newBytes)
+                // console.log('line 485', armManifest, armValue, newBytes)
 
                 value[armManifest.identifier] = armValue.value
                 byteLength += armValue.bytes.byteLength
