@@ -229,9 +229,9 @@ function resolveTypeDef(typedef) {
 const rx = {
     'const': /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
     'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
-    struct: /struct\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
-    union: /union\s+(\w+)\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
-    structInternal: /struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g, unionInternal: /union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
+    struct: /struct\s+(?<name>\w+)\s*\{(?<body>[\s\S]*?)\}\s*;|typedef\s+struct\s*\{(?<bodyTypeDef>[\s\S]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
+    union: /union\s+(?<name>\w+)\s+switch\s*\((?<discriminant>[\s\S]*?)\)\s*\{(?<body>[\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\((?<discriminantTypeDef>[\s\S]*?)\)\s*\{(?<bodyTypeDef>[\s\S]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
+    structAnonymousFlat: /struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g, unionAnonymousFlat: /union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
     typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g, namespace: /^namespace\s+([\w]+)\s*\{/,
     includes: /\%\#include\s+\".+\"/g, unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
 }
@@ -324,28 +324,33 @@ function parseX(xCode) {
 
 
 
-    let anonymousFlatStructMatches = [], anonymousFlatUnionMatches = []
-    while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
-        for (const m of anonymousFlatStructMatches) {
-            const [structName, map] = buildStructFromMatch(m)
-            structs[structName] = map
-            xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
-        }
+    // let anonymousFlatStructMatches = xCode.matchAll(rx.structAnonymousFlat),
+    //     anonymousFlatUnionMatches = xCode.matchAll(rx.unionAnonymousFlat)
+    // console.log('line 329', Array.from(anonymousFlatStructMatches), Array.from(anonymousFlatUnionMatches))
+    // while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
+    //     for (const m of anonymousFlatStructMatches) {
+    //         const [structName, map] = buildStructFromMatch(m)
+    //         structs[structName] = map
+    //         xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
+    //     }
+    //     for (const m of anonymousFlatUnionMatches) {
+    //         const [unionName, discriminant, arms] = buildUnionFromMatch(m)
+    //         unions[unionName] = { discriminant, arms }
+    //         xCode = xCode.replace(m[0], `\n${unionName} ${identifier};\n`).replace(rx.blankLines, '').trim()
+    //     }
+    //     anonymousFlatStructMatches = xCode.matchAll(rx.structAnonymousFlat)
+    //     anonymousFlatUnionMatches = xCode.matchAll(rx.unionAnonymousFlat)
 
-        for (const m of anonymousFlatUnionMatches) {
-            const [unionName, discriminant, arms] = buildUnionFromMatch(m)
-            unions[unionName] = { discriminant, arms }
-            xCode = xCode.replace(m[0], `\n${unionName} ${identifier};\n`).replace(rx.blankLines, '').trim()
-        }
-        anonymousFlatStructMatches = []
-        anonymousFlatUnionMatches = []
-    }
+    //     console.log('line 344', Array.from(anonymousFlatStructMatches), Array.from(anonymousFlatUnionMatches))
+
+    //     break
+    // }
 
 
 
 
     const buildStructFromMatch = function (m) {
-        const isTypeDef = m[0].slice(0, 8) === 'typedef ', structName = isTypeDef ? m[4] : m[1], map = new Map(), structBody = isTypeDef ? m[3] : m[2]
+        const structName = m?.groups?.name ?? m?.groups?.nameTypeDef, structBody = m?.groups?.body ?? m?.groups?.bodyTypeDef, map = new Map()
         for (let declaration of structBody.split('\n')) {
             declaration = declaration.trim()
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
@@ -356,9 +361,10 @@ function parseX(xCode) {
         }
         return [structName, map]
     }, buildUnionFromMatch = function (m) {
-        const isTypeDef = m[0].slice(0, 8) === 'typedef ', unionName = isTypeDef ? m[6] : m[1], discriminantDeclaration = isTypeDef ? m[4] : m[2],
-            [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim()), arms = {},
-            discriminant = { type: discriminantType, value: discriminantValue }, unionBody = isTypeDef ? m[5] : m[3], queuedArms = []
+        const unionName = m?.groups?.name ?? m?.groups?.nameTypeDef, unionBody = m?.groups?.body ?? m?.groups?.bodyTypeDef,
+            discriminantDeclaration = m?.groups?.discriminant ?? m?.groups?.discriminantTypeDef, arms = {}, queuedArms = [],
+            [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim()),
+            discriminant = { type: discriminantType, value: discriminantValue }
         for (let caseSpec of unionBody.split('case ')) {
             caseSpec = caseSpec.trim()
             if (!caseSpec) continue
