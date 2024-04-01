@@ -410,7 +410,8 @@ function parseX(xCode) {
         static namespace = namespace
 
         static manifest = {
-            namespace, entry, constants, enums, typedefs, unions, structs,
+            namespace: this.namespace,
+            entry, constants, enums, typedefs, unions, structs,
             toJSON: function () {
                 const retval = { ...this }
                 for (const structName in { ...retval.structs }) {
@@ -495,14 +496,14 @@ const XDR = {
     createEnum,
     factory: async function (str, options) {
         const namespace = options?.namespace
-        let includes = options?.includes ?? this.options.includes, baseUri = document.baseURI
+        let includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? document.baseURI
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
         let typeKey, isURL = !str.includes(';')
         if (isURL) {
             str = new URL(str, document.baseURI).href
-            typeKey = str
+            typeKey = options?.type ?? str
         } else {
-            typeKey = Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
+            typeKey = options?.type ?? Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
                 x => (('00' + x.toString(16)).slice(-2))).join('')
         }
         if (namespace) {
@@ -512,7 +513,7 @@ const XDR = {
             return this.types[typeKey]
         }
         if (isURL) {
-            baseUri = new URL(str, baseUri).href
+            baseUri = options?.baseURI ?? (new URL(str, baseUri).href)
             str = await (await fetch(str)).text()
         }
         let includesMatches = Array.from(str.matchAll(rx.includes))
@@ -561,7 +562,9 @@ const XDR = {
         opaque: opaqueType, string: stringType, void: voidType
     },
     options: {
-        includes: (match, baseUri) => new URL(`${match.slice(11, -1).trim().slice(4, -1)}x`, (baseUri ?? document.baseURI)).href
+        includes: (match, baseUri) => {
+            return new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href
+        }
     }
 }
 XDR.types.bool = XDR.createEnum([false, true])
