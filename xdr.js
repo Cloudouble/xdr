@@ -427,7 +427,7 @@ function parseX(xCode) {
 
         static serialize(value, instance, declaration) {
             let type = declaration?.type ?? this.manifest.entry
-            declaration ??= this.manifest.structs[type]
+            declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type]
             let result
             if (type in XDR.types) {
                 result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
@@ -454,7 +454,7 @@ function parseX(xCode) {
 
         static deserialize(bytes, instance, declaration, raw) {
             const type = declaration?.type ?? this.manifest.entry
-            declaration ??= this.manifest.structs[type]
+            declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type]
             let result
             if (type in XDR.types) {
                 result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
