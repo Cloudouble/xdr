@@ -160,13 +160,16 @@ class opaqueType extends TypeDef {
 
     consume(bytes, mode, length, isValueInput) {
         if (isValueInput) return [this.constructor.serialize(bytes, this, mode, length), Array.from(bytes)]
-        let consumeLength = Math.ceil(length / 4) * 4, cursor = mode === 'variable' ? (4 + consumeLength) : consumeLength
-        if (bytes.length > cursor) throw new Error(`Insufficient consumable byte length for ${mode} length ${this.constructor.name}: ${bytes.length}`)
+        let consumeLength
         if (mode === 'variable') {
             const valueLength = this.constructor.getView(bytes, 0, 4).getUint32(0, false)
             if (length && (valueLength > length)) throw new Error(`Maximum variable value length exceeded for ${this.constructor.name}: ${bytes.length}`)
+            consumeLength = 4 + Math.ceil(valueLength / 4) * 4
+        } else {
+            consumeLength = Math.ceil(length / 4) * 4
         }
-        return bytes.subarray(0, cursor)
+        if (consumeLength > bytes.length) throw new Error(`Insufficient consumable byte length for ${mode} length ${this.constructor.name}: have ${bytes.length}, need ${consumeLength} bytes.`)
+        return bytes.subarray(0, consumeLength)
     }
 
 }
@@ -458,10 +461,14 @@ function parseX(xCode) {
             let result
             if (type in XDR.types) {
                 result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
+            } else if (type in this.manifest.typedefs) {
+                console.log('line 462', type, result, bytes, { ...this.manifest.typedefs[type], identifier: declaration.identifier })
+                result = this.deserialize(bytes, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
+                console.log('line 464', type, result, bytes, { ...this.manifest.typedefs[type], identifier: declaration.identifier })
             } else if (type in this.manifest.structs) {
                 const value = {}
                 let byteLength = 0, entryResult
-                for (const [identifier, identifierDeclaration] of declaration.entries()) {
+                for (const [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
                     entryResult = this.deserialize(bytes, undefined, identifierDeclaration, true)
                     byteLength += entryResult.bytes.byteLength
                     value[identifier] = entryResult.value
@@ -476,7 +483,10 @@ function parseX(xCode) {
                 newBytes = newBytes.subarray(discriminantInstance.bytes.byteLength)
                 byteLength += discriminantInstance.bytes.byteLength
                 const armManifest = unionManifest.arms[discriminantInstance.identifier],
-                    armValue = this.deserialize(newBytes, undefined, unionManifest.arms[discriminantInstance.identifier], true)
+                    armValue = this.deserialize(newBytes, undefined, armManifest, true)
+
+                console.log('line 485', armManifest, armValue, newBytes)
+
                 value[armManifest.identifier] = armValue.value
                 byteLength += armValue.bytes.byteLength
                 result = { value, bytes: { byteLength } }
