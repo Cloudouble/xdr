@@ -324,7 +324,23 @@ function parseX(xCode) {
 
 
 
-    // NEEDS a recursive process here to take out all anonymous strcts / unions and put them in the top-level as typedefs
+    let anonymousFlatStructMatches = [], anonymousFlatUnionMatches = []
+    while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
+        for (const m of anonymousFlatStructMatches) {
+            const [structName, map] = buildStructFromMatch(m)
+            structs[structName] = map
+            xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
+        }
+
+        for (const m of anonymousFlatUnionMatches) {
+            const [unionName, discriminant, arms] = buildUnionFromMatch(m)
+            unions[unionName] = { discriminant, arms }
+            xCode = xCode.replace(m[0], `\n${unionName} ${identifier};\n`).replace(rx.blankLines, '').trim()
+        }
+        anonymousFlatStructMatches = []
+        anonymousFlatUnionMatches = []
+    }
+
 
 
 
