@@ -229,9 +229,10 @@ function resolveTypeDef(typedef) {
 const rx = {
     'const': /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
     'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
-    struct: /struct\s+(?<name>\w+)\s*\{(?<body>[\s\S]*?)\}\s*;|typedef\s+struct\s*\{(?<bodyTypeDef>[\s\S]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
-    union: /union\s+(?<name>\w+)\s+switch\s*\((?<discriminant>[\s\S]*?)\)\s*\{(?<body>[\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\((?<discriminantTypeDef>[\s\S]*?)\)\s*\{(?<bodyTypeDef>[\s\S]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
-    structAnonymousFlat: /struct\s*\{(?<body>[^\{\}]*?)\}\s+(?<name>\w+)\s*;/g, unionAnonymousFlat: /union\s+switch\s*\((?<discriminant>[\s\S]*?)\)\s*\{(?<body>[^\{\}]*?)\}\s+(?<name>\w+)\s*;/g,
+    struct: /struct\s+(?<name>\w+)\s*\{(?<body>[^\{\}]*?)\}\s*;|typedef\s+struct\s*\{(?<bodyTypeDef>[^\{\}]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
+    union: /union\s+(?<name>\w+)\s+switch\s*\((?<discriminant>[^\)]+?)\)\s*\{(?<body>[^\{\}]*?)\}\s*;|typedef\s+union\s+switch\s*\((?<discriminantTypeDef>[^\)]+?)\)\s*\{(?<bodyTypeDef>[^\{\}]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
+    structAnonymousFlat: /struct\s*\{(?<body>[^\{\}]*?)\}\s+(?<name>\w+)\s*;/g,
+    unionAnonymousFlat: /union\s+switch\s*\((?<discriminant>[^\)]+?)\)\s*\{(?<body>[^\{\}]*?)\}\s+(?<name>\w+)\s*;/g,
     typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g, namespace: /^namespace\s+([\w]+)\s*\{/,
     includes: /\%\#include\s+\".+\"/g, unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
 }
@@ -393,7 +394,7 @@ function parseX(xCode) {
     }
 
     for (const m of xCode.matchAll(rx.struct)) {
-        console.log('line 396', m, xCode)
+        // console.log('line 396', m, xCode)
         const [structName, map] = buildStructFromMatch(m)
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()

@@ -59,7 +59,7 @@
         // console.log("Deserialize: ", XDR.deserialize(fileBytes, fileType))
 
         // stringify any conforming value to a base64 string encoding the bytes
-        // const base64Str = XDR.stringify(fileValue, fileType)
+        const base64Str = XDR.stringify(fileValue, fileType)
 
         // parse any base64 string encoding of bytes to a live object that conforms to the type definition
         // const parseResult = XDR.parse(base64Str, fileType)
@@ -81,9 +81,9 @@
             // ['contract-spec']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-spec.x'),
             // contract: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract.x'),
 
-            // internal: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-internal.x'),
+            internal: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-internal.x'),
             ['ledger-entries']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger-entries.x'),
-            // ledger: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x'),
+            ledger: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x'),
             // overlay: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x'),
             // transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x'),
 
