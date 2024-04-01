@@ -368,11 +368,9 @@ function parseX(xCode) {
         return [unionName, discriminant, arms]
     }
 
-
     let anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)),
         anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat)),
         anonymousStructCounter = 0, anonymousUnionCounter = 0
-    console.log('line 373', anonymousFlatStructMatches.length, anonymousFlatUnionMatches.length)
     while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
         for (const m of anonymousFlatStructMatches) {
             const [identifier, map] = buildStructFromMatch(m), structName = `anonymousStructType${++anonymousStructCounter}`
@@ -386,12 +384,7 @@ function parseX(xCode) {
         }
         anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat))
         anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
-
-        console.log('line 390', anonymousFlatStructMatches.length, anonymousFlatUnionMatches.length)
-
-        // break
     }
-
 
     for (const m of xCode.matchAll(rx.union)) {
         const [unionName, discriminant, arms] = buildUnionFromMatch(m)
@@ -404,61 +397,6 @@ function parseX(xCode) {
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
-
-
-
-    // const SCPStatement = {
-    //     nodeID: 'abc',
-    //     slotIndex: 1,
-    //     pledges: {
-    //         type: 'SCP_ST_PREPARE',
-    //         prepare: {
-    //             quorumSetHash: '',
-    //             ballot: {},
-    //         }
-    //     }
-    // }
-
-    // struct SCPStatement
-    // {
-    //     NodeID nodeID;    // v
-    //     uint64 slotIndex; // i
-
-    //     union switch (SCPStatementType type)
-    //     {
-    //     case SCP_ST_PREPARE:
-    //         struct
-    //         {
-    //             Hash quorumSetHash;       // D
-    //             SCPBallot ballot;         // b
-    //             SCPBallot* prepared;      // p
-    //             SCPBallot* preparedPrime; // p'
-    //             uint32 nC;                // c.n
-    //             uint32 nH;                // h.n
-    //         } prepare;
-    //     case SCP_ST_CONFIRM:
-    //         struct
-    //         {
-    //             SCPBallot ballot;   // b
-    //             uint32 nPrepared;   // p.n
-    //             uint32 nCommit;     // c.n
-    //             uint32 nH;          // h.n
-    //             Hash quorumSetHash; // D
-    //         } confirm;
-    //     case SCP_ST_EXTERNALIZE:
-    //         struct
-    //         {
-    //             SCPBallot commit;         // c
-    //             uint32 nH;                // h.n
-    //             Hash commitQuorumSetHash; // D used before EXTERNALIZE
-    //         } externalize;
-    //     case SCP_ST_NOMINATE:
-    //         SCPNomination nominate;
-    //     }
-    //     pledges;
-    // };
-
-
 
     let entry
     const dependedTypes = new Set()
