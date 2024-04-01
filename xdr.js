@@ -231,7 +231,7 @@ const rx = {
     'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
     struct: /struct\s+(?<name>\w+)\s*\{(?<body>[\s\S]*?)\}\s*;|typedef\s+struct\s*\{(?<bodyTypeDef>[\s\S]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
     union: /union\s+(?<name>\w+)\s+switch\s*\((?<discriminant>[\s\S]*?)\)\s*\{(?<body>[\s\S]*?)\}\s*;|typedef\s+union\s+switch\s*\((?<discriminantTypeDef>[\s\S]*?)\)\s*\{(?<bodyTypeDef>[\s\S]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
-    structAnonymousFlat: /struct\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g, unionAnonymousFlat: /union\s+switch\s*\(([\s\S]*?)\)\s*\{([\s\S]*?)\}\s+(\w+)\s*;/g,
+    structAnonymousFlat: /struct\s*\{(?<body>[\s\S]*?)\}\s+(?<name>\w+)\s*;/g, unionAnonymousFlat: /union\s+switch\s*\((?<discriminant>[\s\S]*?)\)\s*\{(?<body>[\s\S]*?)\}\s+(?<name>\w+)\s*;/g,
     typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g, namespace: /^namespace\s+([\w]+)\s*\{/,
     includes: /\%\#include\s+\".+\"/g, unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
 }
@@ -324,27 +324,27 @@ function parseX(xCode) {
 
 
 
-    // let anonymousFlatStructMatches = xCode.matchAll(rx.structAnonymousFlat),
-    //     anonymousFlatUnionMatches = xCode.matchAll(rx.unionAnonymousFlat)
-    // console.log('line 329', Array.from(anonymousFlatStructMatches), Array.from(anonymousFlatUnionMatches))
-    // while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
-    //     for (const m of anonymousFlatStructMatches) {
-    //         const [structName, map] = buildStructFromMatch(m)
-    //         structs[structName] = map
-    //         xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
-    //     }
-    //     for (const m of anonymousFlatUnionMatches) {
-    //         const [unionName, discriminant, arms] = buildUnionFromMatch(m)
-    //         unions[unionName] = { discriminant, arms }
-    //         xCode = xCode.replace(m[0], `\n${unionName} ${identifier};\n`).replace(rx.blankLines, '').trim()
-    //     }
-    //     anonymousFlatStructMatches = xCode.matchAll(rx.structAnonymousFlat)
-    //     anonymousFlatUnionMatches = xCode.matchAll(rx.unionAnonymousFlat)
+    let anonymousFlatStructMatches = xCode.matchAll(rx.structAnonymousFlat),
+        anonymousFlatUnionMatches = xCode.matchAll(rx.unionAnonymousFlat)
+    console.log('line 329', Array.from(anonymousFlatStructMatches), Array.from(anonymousFlatUnionMatches))
+    while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
+        for (const m of anonymousFlatStructMatches) {
+            const [structName, map] = buildStructFromMatch(m)
+            structs[structName] = map
+            xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
+        }
+        for (const m of anonymousFlatUnionMatches) {
+            const [unionName, discriminant, arms] = buildUnionFromMatch(m)
+            unions[unionName] = { discriminant, arms }
+            xCode = xCode.replace(m[0], `\n${unionName} ${identifier};\n`).replace(rx.blankLines, '').trim()
+        }
+        anonymousFlatStructMatches = xCode.matchAll(rx.structAnonymousFlat)
+        anonymousFlatUnionMatches = xCode.matchAll(rx.unionAnonymousFlat)
 
-    //     console.log('line 344', Array.from(anonymousFlatStructMatches), Array.from(anonymousFlatUnionMatches))
+        console.log('line 344', Array.from(anonymousFlatStructMatches), Array.from(anonymousFlatUnionMatches))
 
-    //     break
-    // }
+        break
+    }
 
 
 
