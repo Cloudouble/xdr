@@ -268,22 +268,34 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
 }
 
 function createEnum(body) {
-    if (!body || !Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
+    if (!body) {
+        body === 0
+    } else {
+        if (!Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
+    }
     return class extends intType {
 
         #body = body
         #identifier
 
         constructor(input) {
-            const originalInput = input
-            switch (typeof input) {
-                case 'boolean': case 'string':
-                    input = body.indexOf(input)
+            let originalInput = input
+            if (!body) {
+                input = parseInt(input) || 0
+            } else {
+                switch (typeof input) {
+                    case 'boolean': case 'string':
+                        input = body.indexOf(input)
+                }
             }
             super(input, true)
             const value = this.value
-            if (this.#body[value] === undefined) throw new Error(`no enum identifier found for ${typeof originalInput} ${originalInput}`)
-            this.#identifier = this.#body[value]
+            if (!body) {
+                this.#identifier = input
+            } else {
+                if (this.#body[value] === undefined) throw new Error(`no enum identifier found for ${typeof originalInput} ${originalInput}`)
+                this.#identifier = this.#body[value]
+            }
         }
 
         get identifier() { return this.#identifier }
@@ -475,16 +487,19 @@ function parseX(xCode) {
                 result = { value, bytes: { byteLength } }
             } else if (type in this.manifest.unions) {
                 let byteLength = 0, newBytes = bytes.subarray(0)
-                const unionManifest = this.manifest.unions[type],
-                    enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type]), discriminantInstance = new enumClass(newBytes),
-                    value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
+                const unionManifest = this.manifest.unions[type]
+                const enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type])
+                let discriminantInstance
+                try {
+                    discriminantInstance = new enumClass(newBytes)
+                } catch (e) {
+                    discriminantInstance = new enumClass(0)
+                }
+                const value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
                 newBytes = newBytes.subarray(discriminantInstance.bytes.byteLength)
                 byteLength += discriminantInstance.bytes.byteLength
                 const armManifest = unionManifest.arms[discriminantInstance.identifier],
                     armValue = this.deserialize(newBytes, undefined, armManifest, true)
-
-                // console.log('line 485', armManifest, armValue, newBytes)
-
                 value[armManifest.identifier] = armValue.value
                 byteLength += armValue.bytes.byteLength
                 result = { value, bytes: { byteLength } }
