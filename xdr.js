@@ -394,7 +394,6 @@ function parseX(xCode) {
     }
 
     for (const m of xCode.matchAll(rx.struct)) {
-        // console.log('line 396', m, xCode)
         const [structName, map] = buildStructFromMatch(m)
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()

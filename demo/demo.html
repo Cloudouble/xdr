@@ -74,20 +74,19 @@
         window.XDR = XDR
 
         const stellar = {
-            // scp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x'),
-            // ['contract-config-setting']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-config-setting.x'),
-            // ['contract-env-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-env-meta.x'),
-            // ['contract-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-meta.x'),
-            // ['contract-spec']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-spec.x'),
-            // contract: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract.x'),
+            scp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x'),
+            ['contract-config-setting']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-config-setting.x'),
+            ['contract-env-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-env-meta.x'),
+            ['contract-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-meta.x'),
+            ['contract-spec']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-spec.x'),
+            contract: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract.x'),
 
             internal: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-internal.x'),
             ['ledger-entries']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger-entries.x'),
             ledger: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x'),
-            // overlay: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x'),
-            // transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x'),
-
-            // types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
+            overlay: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x'),
+            transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x'),
+            types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
         }
 
         window.stellar = stellar
