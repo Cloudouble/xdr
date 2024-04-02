@@ -269,7 +269,7 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
 
 function createEnum(body) {
     body ||= 0
-    if (!Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
+    if (body && !Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
     return class extends intType {
 
         #body = body
@@ -464,9 +464,10 @@ function parseX(xCode) {
             return result
         }
 
-        static deserialize(bytes, instance, declaration, raw) {
+        static deserialize(bytes, instance, declaration, raw, isArrayItem) {
             const type = declaration?.type ?? this.manifest.entry
             declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type]
+            // console.log('line 470', JSON.stringify(declaration))
             let result
             if (type in XDR.types) {
                 result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
@@ -475,7 +476,13 @@ function parseX(xCode) {
             } else if (type in this.manifest.structs) {
                 const value = {}
                 let byteLength = 0, entryResult
-                for (const [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
+                for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
+
+                    if (isArrayItem) identifierDeclaration = { ...identifierDeclaration }
+                    delete identifierDeclaration.length
+                    delete identifierDeclaration.mode
+
+                    // if (identifier === 'operations') console.log('line 485', identifier, JSON.stringify(identifierDeclaration))
 
                     const { length: declarationLength, mode: declarationMode, type: declarationType } = identifierDeclaration
 
@@ -488,18 +495,15 @@ function parseX(xCode) {
                         // if (type === 'Transaction') console.log('line 488', declarationVariableLength, declarationLength, ((declarationMode === 'variable') && (declarationVariableLength > declarationLength)))
 
                         if ((declarationMode === 'variable') && (declarationVariableLength > declarationLength)) {
-                            console.log('line 491', type, declarationLength, declarationVariableLength, declarationMode)
+                            console.log('line 498', type, declarationLength, declarationVariableLength, declarationMode)
                             throw new Error('variable length exceeds declaration length')
                         }
 
                         entryResult = new Array(declarationVariableLength)
                         bytes = bytes.subarray(4)
 
-                        const indexDeclaration = { ...identifierDeclaration }
-                        delete indexDeclaration.length
-                        delete indexDeclaration.mode
                         for (const i of entryResult.keys()) {
-                            const indexResult = this.deserialize(bytes, undefined, indexDeclaration, true)
+                            const indexResult = this.deserialize(bytes, undefined, { ...identifierDeclaration, length: undefined, mode: undefined }, true, true)
                             byteLength += indexResult.bytes.byteLength
                             entryResult[i] = indexResult.value
                             bytes = bytes.subarray(indexResult.bytes.byteLength)
@@ -510,6 +514,7 @@ function parseX(xCode) {
                         entryResult = this.deserialize(bytes, undefined, identifierDeclaration, true)
                         byteLength += entryResult.bytes.byteLength
                         value[identifier] = entryResult.value
+                        // console.log('line 517', identifier, value)
                         bytes = bytes.subarray(entryResult.bytes.byteLength)
                     }
 
