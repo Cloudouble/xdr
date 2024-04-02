@@ -268,11 +268,8 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
 }
 
 function createEnum(body) {
-    if (!body) {
-        body === 0
-    } else {
-        if (!Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
-    }
+    body ||= 0
+    if (!Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
     return class extends intType {
 
         #body = body
@@ -479,10 +476,43 @@ function parseX(xCode) {
                 const value = {}
                 let byteLength = 0, entryResult
                 for (const [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-                    entryResult = this.deserialize(bytes, undefined, identifierDeclaration, true)
-                    byteLength += entryResult.bytes.byteLength
-                    value[identifier] = entryResult.value
-                    bytes = bytes.subarray(entryResult.bytes.byteLength)
+
+                    const { length: declarationLength, mode: declarationMode, type: declarationType } = identifierDeclaration
+
+
+                    if (declarationLength && !(declarationType in XDR.types)) {
+
+
+                        const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
+
+                        // if (type === 'Transaction') console.log('line 488', declarationVariableLength, declarationLength, ((declarationMode === 'variable') && (declarationVariableLength > declarationLength)))
+
+                        if ((declarationMode === 'variable') && (declarationVariableLength > declarationLength)) {
+                            console.log('line 491', type, declarationLength, declarationVariableLength, declarationMode)
+                            throw new Error('variable length exceeds declaration length')
+                        }
+
+                        entryResult = new Array(declarationVariableLength)
+                        bytes = bytes.subarray(4)
+
+                        const indexDeclaration = { ...identifierDeclaration }
+                        delete indexDeclaration.length
+                        delete indexDeclaration.mode
+                        for (const i of entryResult.keys()) {
+                            const indexResult = this.deserialize(bytes, undefined, indexDeclaration, true)
+                            byteLength += indexResult.bytes.byteLength
+                            entryResult[i] = indexResult.value
+                            bytes = bytes.subarray(indexResult.bytes.byteLength)
+                        }
+
+                        value[identifier] = entryResult
+                    } else {
+                        entryResult = this.deserialize(bytes, undefined, identifierDeclaration, true)
+                        byteLength += entryResult.bytes.byteLength
+                        value[identifier] = entryResult.value
+                        bytes = bytes.subarray(entryResult.bytes.byteLength)
+                    }
+
                 }
                 result = { value, bytes: { byteLength } }
             } else if (type in this.manifest.unions) {
