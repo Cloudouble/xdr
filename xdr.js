@@ -20,6 +20,7 @@ class TypeDef {
     constructor(input, ...consumeArgs) {
         if (!(input instanceof Uint8Array) && Array.isArray(input) && input.every(i => Number.isInteger(i) && (i >= 0) && (i <= 255))) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
+            console.log('line 23', input.byteLength, this.constructor.name)
             const consumeResult = this.#consume(input, ...consumeArgs), isConsumeResultArray = Array.isArray(consumeResult)
             this.#bytes = isConsumeResultArray ? consumeResult[0] : consumeResult
             if (isConsumeResultArray && consumeResult.length > 1) this.#value = consumeResult[1]
@@ -267,10 +268,12 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
     return { type, length, mode, identifier, optional, unsigned }
 }
 
-function createEnum(body) {
+function createEnum(body, name) {
     body ||= 0
     if (body && (!Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean')))) throw new Error('enum must have a body array of string or boolean identifiers')
     return class extends intType {
+
+        static name = name
 
         #body = body
         #identifier
@@ -302,7 +305,7 @@ function createEnum(body) {
     }
 }
 
-function parseX(xCode) {
+function parseX(xCode, className) {
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
@@ -420,12 +423,12 @@ function parseX(xCode) {
 
     const typeClass = class extends TypeDef {
 
+        static name = className
         static namespace = namespace
-
         static entry = entry
 
         static manifest = {
-            namespace: this.namespace, entry: this.entry,
+            name: this.name, namespace: this.namespace, entry: this.entry,
             constants, enums, typedefs, unions, structs,
             toJSON: function () {
                 const retval = { ...this }
@@ -455,7 +458,7 @@ function parseX(xCode) {
                 for (const chunk of chunks) result.set(...chunk)
             } else if (type in this.manifest.unions) {
                 const unionManifest = this.manifest.unions[type], enumIdentifier = value[unionManifest.discriminant.value],
-                    enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type]), discriminantBytes = (new enumClass(enumIdentifier)).bytes,
+                    enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type), discriminantBytes = (new enumClass(enumIdentifier)).bytes,
                     armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(value[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier])
                 result = new Uint8Array(discriminantBytes.length + armBytes.length)
                 result.set(discriminantBytes, 0)
@@ -511,7 +514,7 @@ function parseX(xCode) {
             } else if (type in this.manifest.unions) {
                 let byteLength = 0, newBytes = bytes.subarray(0)
                 const unionManifest = this.manifest.unions[type]
-                const enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type])
+                const enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
                 let discriminantInstance
                 try {
                     discriminantInstance = new enumClass(newBytes)
@@ -609,7 +612,7 @@ const XDR = {
                 includesMatches = Array.from(str.matchAll(rx.includes))
             }
         }
-        const typeClass = parseX(str)
+        const typeClass = parseX(str, typeKey)
         if (entry) typeClass.entry = typeClass.manifest.entry = entry
         if (namespace) typeClass.namespace = namespace
         if (typeClass.namespace) {
@@ -620,7 +623,6 @@ const XDR = {
     },
     deserialize: function (bytes, typedef) {
         typedef = resolveTypeDef(typedef)
-        console.log('line 623', bytes.byteLength, bytes.byteOffset)
         return (new typedef(bytes)).value
     },
     serialize: function (value, typedef) {
@@ -646,6 +648,10 @@ const XDR = {
         }
     }
 }
-XDR.types.bool = XDR.createEnum([false, true])
+XDR.types.bool = XDR.createEnum([false, true], 'bool')
 
 export default XDR
+
+/*
+[0,0,0,2,0,0,0,0,208,224,69,231,133,162,31,177,250,104,138,186,172,139,34,137,92,20,18,118,232,19,154,16,194,184,127,216,52,179,47,0,0,15,66,64,0,11,247,65,0,0,0,29,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,16,125,209,107,44,56,51,72,130,46,129,30,247,170,207,20,209,152,138,111,0,84,114,84,211,62,30,109,134,86,224,156,0,0,0,0,0,0,0,0,152,54,221,29,212,212,36,59,153,48,106,166,194,154,104,45,55,50,154,78,75,37,151,236,2,49,158,35,170,99,124,114,0,0,0,23,72,118,232,0,0,0,0,0,0,0,0,2,52,179,47,0,0,0,0,64,99,30,16,82,99,38,101,152,96,227,61,86,66,230,51,79,45,96,143,67,175,46,31,63,142,7,199,152,44,150,145,219,195,191,51,105,38,143,140,19,8,71,158,192,153,99,113,186,37,11,251,144,4,88,216,153,241,155,116,155,132,47,254,11,134,86,224,156,0,0,0,64,214,109,20,189,194,246,196,3,234,52,210,8,146,78,104,179,36,13,181,48,187,220,215,174,37,13,36,150,10,47,54,118,15,137,157,67,40,210,187,120,156,75,238,247,68,202,155,0,104,134,229,86,168,244,179,94,50,82,253,28,73,7,156,0]
+*/
