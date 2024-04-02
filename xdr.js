@@ -269,7 +269,7 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
 
 function createEnum(body) {
     body ||= 0
-    if (body && !Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean'))) throw new Error('enum must have a body array of string or boolean identifiers')
+    if (body && (!Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean')))) throw new Error('enum must have a body array of string or boolean identifiers')
     return class extends intType {
 
         #body = body
@@ -467,7 +467,7 @@ function parseX(xCode) {
         static deserialize(bytes, instance, declaration, raw, isArrayItem) {
             const type = declaration?.type ?? this.manifest.entry
             declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type]
-            // console.log('line 470', JSON.stringify(declaration))
+            console.log('line 470', JSON.stringify(declaration))
             let result
             if (type in XDR.types) {
                 result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
@@ -478,46 +478,34 @@ function parseX(xCode) {
                 let byteLength = 0, entryResult
                 for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
 
-                    if (isArrayItem) identifierDeclaration = { ...identifierDeclaration }
-                    delete identifierDeclaration.length
-                    delete identifierDeclaration.mode
-
-                    // if (identifier === 'operations') console.log('line 485', identifier, JSON.stringify(identifierDeclaration))
+                    if (isArrayItem) {
+                        identifierDeclaration = { ...identifierDeclaration }
+                        delete identifierDeclaration.length
+                        delete identifierDeclaration.mode
+                    }
 
                     const { length: declarationLength, mode: declarationMode, type: declarationType } = identifierDeclaration
 
-
                     if (declarationLength && !(declarationType in XDR.types)) {
-
-
                         const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
-
-                        // if (type === 'Transaction') console.log('line 488', declarationVariableLength, declarationLength, ((declarationMode === 'variable') && (declarationVariableLength > declarationLength)))
-
-                        if ((declarationMode === 'variable') && (declarationVariableLength > declarationLength)) {
-                            console.log('line 498', type, declarationLength, declarationVariableLength, declarationMode)
-                            throw new Error('variable length exceeds declaration length')
+                        if (declarationMode === 'variable') {
+                            bytes = bytes.subarray(4)
+                            if (declarationVariableLength > declarationLength) throw new Error('variable length exceeds declaration length')
                         }
-
                         entryResult = new Array(declarationVariableLength)
-                        bytes = bytes.subarray(4)
-
                         for (const i of entryResult.keys()) {
                             const indexResult = this.deserialize(bytes, undefined, { ...identifierDeclaration, length: undefined, mode: undefined }, true, true)
                             byteLength += indexResult.bytes.byteLength
                             entryResult[i] = indexResult.value
                             bytes = bytes.subarray(indexResult.bytes.byteLength)
                         }
-
                         value[identifier] = entryResult
                     } else {
                         entryResult = this.deserialize(bytes, undefined, identifierDeclaration, true)
                         byteLength += entryResult.bytes.byteLength
                         value[identifier] = entryResult.value
-                        // console.log('line 517', identifier, value)
                         bytes = bytes.subarray(entryResult.bytes.byteLength)
                     }
-
                 }
                 result = { value, bytes: { byteLength } }
             } else if (type in this.manifest.unions) {
@@ -530,13 +518,41 @@ function parseX(xCode) {
                 } catch (e) {
                     discriminantInstance = new enumClass(0)
                 }
+                let armDeclaration = unionManifest.arms[discriminantInstance.identifier], armResult
+                if (armDeclaration === undefined) {
+                    discriminantInstance = new enumClass(0)
+                    armDeclaration = unionManifest.arms[discriminantInstance.identifier]
+                }
                 const value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
                 newBytes = newBytes.subarray(discriminantInstance.bytes.byteLength)
                 byteLength += discriminantInstance.bytes.byteLength
-                const armManifest = unionManifest.arms[discriminantInstance.identifier],
-                    armValue = this.deserialize(newBytes, undefined, armManifest, true)
-                value[armManifest.identifier] = armValue.value
-                byteLength += armValue.bytes.byteLength
+                console.log('line 526', armDeclaration, discriminantInstance, unionManifest.arms)
+                if (isArrayItem) {
+                    armDeclaration = { ...armDeclaration }
+                    delete armDeclaration.length
+                    delete armDeclaration.mode
+                }
+                const { length: armLength, mode: armMode, type: armType, identifier } = armDeclaration
+                if (armLength && !(armType in XDR.types)) {
+                    const armVariableLength = armMode === 'variable' ? this.getView(bytes).getUint32(0, false) : armLength
+                    if (armMode === 'variable') {
+                        bytes = bytes.subarray(4)
+                        if (armVariableLength > armLength) throw new Error('variable length exceeds arm declaration length')
+                    }
+                    armResult = new Array(armVariableLength)
+                    for (const i of armResult.keys()) {
+                        const indexResult = this.deserialize(bytes, undefined, { ...armDeclaration, length: undefined, mode: undefined }, true, true)
+                        byteLength += indexResult.bytes.byteLength
+                        armResult[i] = indexResult.value
+                        bytes = bytes.subarray(indexResult.bytes.byteLength)
+                    }
+                    value[identifier] = armResult
+                } else {
+                    armResult = this.deserialize(bytes, undefined, armDeclaration, true)
+                    byteLength += armResult.bytes.byteLength
+                    value[identifier] = armResult.value
+                    bytes = bytes.subarray(armResult.bytes.byteLength)
+                }
                 result = { value, bytes: { byteLength } }
             }
             return raw ? result : result.value
