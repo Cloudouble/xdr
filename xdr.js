@@ -465,6 +465,7 @@ function parseX(xCode) {
         }
 
         static deserialize(bytes, instance, declaration, raw, isArrayItem) {
+            if (!raw) console.log('line 468', bytes.byteLength, bytes.byteOffset)
             const type = declaration?.type ?? this.manifest.entry
             declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type]
             let result
@@ -553,6 +554,7 @@ function parseX(xCode) {
                 }
                 result = { value, bytes: { byteLength } }
             }
+            if (!raw) console.log('line 556', bytes.byteLength, bytes.byteOffset)
             return raw ? result : result.value
         }
 
@@ -618,6 +620,7 @@ const XDR = {
     },
     deserialize: function (bytes, typedef) {
         typedef = resolveTypeDef(typedef)
+        console.log('line 623', bytes.byteLength, bytes.byteOffset)
         return (new typedef(bytes)).value
     },
     serialize: function (value, typedef) {
