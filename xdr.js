@@ -20,7 +20,6 @@ class TypeDef {
     constructor(input, ...consumeArgs) {
         if (!(input instanceof Uint8Array) && Array.isArray(input) && input.every(i => Number.isInteger(i) && (i >= 0) && (i <= 255))) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
-            console.log('line 23', input.byteLength, this.constructor.name)
             const consumeResult = this.#consume(input, ...consumeArgs), isConsumeResultArray = Array.isArray(consumeResult)
             this.#bytes = isConsumeResultArray ? consumeResult[0] : consumeResult
             if (isConsumeResultArray && consumeResult.length > 1) this.#value = consumeResult[1]
@@ -468,7 +467,6 @@ function parseX(xCode, className) {
         }
 
         static deserialize(bytes, instance, declaration, raw, isArrayItem) {
-            if (!raw) console.log('line 468', bytes.byteLength, bytes.byteOffset)
             const type = declaration?.type ?? this.manifest.entry
             declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type]
             let result
@@ -480,15 +478,12 @@ function parseX(xCode, className) {
                 const value = {}
                 let byteLength = 0, entryResult
                 for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-
                     if (isArrayItem) {
                         identifierDeclaration = { ...identifierDeclaration }
                         delete identifierDeclaration.length
                         delete identifierDeclaration.mode
                     }
-
                     const { length: declarationLength, mode: declarationMode, type: declarationType } = identifierDeclaration
-
                     if (declarationLength && !(declarationType in XDR.types)) {
                         const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
                         if (declarationMode === 'variable') {
@@ -557,12 +552,12 @@ function parseX(xCode, className) {
                 }
                 result = { value, bytes: { byteLength } }
             }
-            if (!raw) console.log('line 556', bytes.byteLength, bytes.byteOffset)
             return raw ? result : result.value
         }
 
         consume(bytes) {
             const newBytes = bytes.slice(0), testValue = this.constructor.deserialize(newBytes, undefined, undefined, true)
+            if (this.value === undefined) this.value = testValue.value
             return bytes.subarray(0, testValue.bytes.byteLength)
         }
 
