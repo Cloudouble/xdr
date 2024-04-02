@@ -486,7 +486,7 @@ function parseX(xCode, className) {
                     const { length: declarationLength, mode: declarationMode, type: declarationType } = identifierDeclaration
                     if (declarationLength && !(declarationType in XDR.types)) {
                         const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
-                        console.log('line 489', declarationVariableLength)
+                        console.log('line 489', Array.from(bytes), declarationVariableLength)
                         if (declarationMode === 'variable') {
                             bytes = bytes.subarray(4)
                             if (declarationVariableLength > declarationLength) throw new Error('variable length exceeds declaration length')
