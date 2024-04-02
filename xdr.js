@@ -486,6 +486,7 @@ function parseX(xCode, className) {
                     const { length: declarationLength, mode: declarationMode, type: declarationType } = identifierDeclaration
                     if (declarationLength && !(declarationType in XDR.types)) {
                         const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
+                        console.log('line 489', declarationVariableLength)
                         if (declarationMode === 'variable') {
                             bytes = bytes.subarray(4)
                             if (declarationVariableLength > declarationLength) throw new Error('variable length exceeds declaration length')
@@ -507,12 +508,15 @@ function parseX(xCode, className) {
                 }
                 result = { value, bytes: { byteLength } }
             } else if (type in this.manifest.unions) {
-                let byteLength = 0, newBytes = bytes.subarray(0)
+                let byteLength = 0
                 const unionManifest = this.manifest.unions[type]
                 const enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
+                const enumValue = this.getView(bytes).getUint32(0, false)
+                bytes = bytes.subarray(4)
+                byteLength += 4
                 let discriminantInstance
                 try {
-                    discriminantInstance = new enumClass(newBytes)
+                    discriminantInstance = new enumClass(enumValue)
                 } catch (e) {
                     discriminantInstance = new enumClass(0)
                 }
@@ -522,8 +526,6 @@ function parseX(xCode, className) {
                     armDeclaration = unionManifest.arms[discriminantInstance.identifier]
                 }
                 const value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
-                newBytes = newBytes.subarray(discriminantInstance.bytes.byteLength)
-                byteLength += discriminantInstance.bytes.byteLength
                 if (isArrayItem) {
                     armDeclaration = { ...armDeclaration }
                     delete armDeclaration.length
@@ -552,6 +554,7 @@ function parseX(xCode, className) {
                 }
                 result = { value, bytes: { byteLength } }
             }
+            console.log('line 557', result.value)
             return raw ? result : result.value
         }
 
