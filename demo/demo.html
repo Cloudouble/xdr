@@ -93,6 +93,15 @@
             transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
                 entry: 'TransactionEnvelope', type: 'Transaction'
             }),
+
+            operation: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
+                entry: 'Operation', type: 'Operation'
+            }),
+            temp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
+                entry: 'TransactionV1Envelope', type: 'TransactionV1Envelope'
+            }),
+
+
             types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
         }
 
@@ -116,7 +125,7 @@
             ...Object.fromEntries(Object.entries(stellar).map(ent => ([`stellar-${ent[0]}`, JSON.stringify(ent[1].manifest, null, 4)])))
 
         }
-        for (const [id, textContent] of Object.entries(examples)) document.getElementById(id).querySelector('pre').textContent = textContent
+        for (const [id, textContent] of Object.entries(examples)) (document.getElementById(id)?.querySelector('pre') || {}).textContent = textContent
 
     </script>
 
