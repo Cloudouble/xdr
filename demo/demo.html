@@ -91,7 +91,7 @@
             ledger: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x'),
             overlay: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x'),
             transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
-                entry: 'TransactionEnvelope', type: 'Transaction1'
+                entry: 'TransactionEnvelope', type: 'Transaction'
             }),
 
             operation: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
