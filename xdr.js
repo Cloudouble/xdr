@@ -469,7 +469,6 @@ function parseX(xCode, className) {
         static deserialize(bytes, instance, declaration, raw, isArrayItem) {
             const type = declaration?.type ?? this.manifest.entry
             declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type]
-            if (declaration.optional) console.log('line 472', declaration)
             let result
             if (type in XDR.types) {
                 result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
@@ -479,7 +478,6 @@ function parseX(xCode, className) {
                 const value = {}
                 let byteLength = 0, entryResult
                 for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-                    if (identifierDeclaration.optional) console.log('line 482', identifierDeclaration)
                     if (isArrayItem) {
                         identifierDeclaration = { ...identifierDeclaration }
                         delete identifierDeclaration.length
