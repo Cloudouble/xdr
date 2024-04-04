@@ -14,11 +14,10 @@ class TypeDef {
         if (i instanceof Uint8Array) return new DataView(i.buffer, i.byteOffset + (byteOffset ?? 0), byteLength ?? i.byteLength)
     }
     static isMinBytesInput(bytes) { return Number.isInteger(this.minBytesLength) ? (bytes.length >= this.minBytesLength) : true }
-    static isValueInput(input) { return input && !(input instanceof Uint8Array) && (input instanceof Object) }
+    static isValueInput(input) { return !(input instanceof Uint8Array) }
     static serialize(value) { return new Uint8Array() }
 
     constructor(input, ...consumeArgs) {
-        if (!(input instanceof Uint8Array) && Array.isArray(input) && input.every(i => Number.isInteger(i) && (i >= 0) && (i <= 255))) input = new Uint8Array(input)
         if (input instanceof Uint8Array) {
             const consumeResult = this.#consume(input, ...consumeArgs), isConsumeResultArray = Array.isArray(consumeResult)
             this.#bytes = isConsumeResultArray ? consumeResult[0] : consumeResult
@@ -441,7 +440,7 @@ function parseX(xCode, className) {
 
         static serialize(value, instance, declaration) {
             let type = declaration?.type ?? this.manifest.entry
-            declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type]
+            declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
             let result
             if (type in XDR.types) {
                 result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
@@ -470,7 +469,7 @@ function parseX(xCode, className) {
 
         static deserialize(bytes, instance, declaration, raw, isArrayItem) {
             const type = declaration?.type ?? this.manifest.entry
-            declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type]
+            declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
             let result
             if (type in XDR.types) {
                 result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
