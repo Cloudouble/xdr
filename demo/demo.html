@@ -90,15 +90,9 @@
             ['ledger-entries']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger-entries.x', { entry: 'LedgerEntry' }),
             ledger: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x'),
             overlay: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x'),
-            transaction: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
-                entry: 'TransactionEnvelope', type: 'Transaction'
+            ['transaction-envelope']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
+                entry: 'TransactionEnvelope', type: 'TransactionEnvelope'
             }),
-
-            temp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
-                entry: 'Operation', type: true
-            }),
-
-
             types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
         }
 
@@ -125,7 +119,7 @@
         for (const [id, textContent] of Object.entries(examples)) (document.getElementById(id)?.querySelector('pre') || {}).textContent = textContent
 
 
-        window.test = XDR.parse("AAAAAgAAAADQ4EXnhaIfsfpoirqsiyKJXBQSdugTmhDCuH/YNLMvAAAPQkAAC/dBAAAAHQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAABAAAAABB90WssODNIgi6BHveqzxTRmIpvAFRyVNM+Hm2GVuCcAAAAAAAAAACYNt0d1NQkO5kwaqbCmmgtNzKaTksll+wCMZ4jqmN8cgAAABdIdugAAAAAAAAAAAI0sy8AAAAAQGMeEFJjJmWYYOM9VkLmM08tYI9Dry4fP44Hx5gslpHbw78zaSaPjBMIR57AmWNxuiUL+5AEWNiZ8Zt0m4Qv/guGVuCcAAAAQNZtFL3C9sQD6jTSCJJOaLMkDbUwu9zXriUNJJYKLzZ2D4mdQyjSu3icS+73RMqbAGiG5Vao9LNeMlL9HEkHnAA=", XDR.types.stellar.Transaction)
+        window.test = XDR.parse("AAAAAgAAAADQ4EXnhaIfsfpoirqsiyKJXBQSdugTmhDCuH/YNLMvAAAPQkAAC/dBAAAAHQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAABAAAAABB90WssODNIgi6BHveqzxTRmIpvAFRyVNM+Hm2GVuCcAAAAAAAAAACYNt0d1NQkO5kwaqbCmmgtNzKaTksll+wCMZ4jqmN8cgAAABdIdugAAAAAAAAAAAI0sy8AAAAAQGMeEFJjJmWYYOM9VkLmM08tYI9Dry4fP44Hx5gslpHbw78zaSaPjBMIR57AmWNxuiUL+5AEWNiZ8Zt0m4Qv/guGVuCcAAAAQNZtFL3C9sQD6jTSCJJOaLMkDbUwu9zXriUNJJYKLzZ2D4mdQyjSu3icS+73RMqbAGiG5Vao9LNeMlL9HEkHnAA=", XDR.types.stellar.TransactionEnvelope)
 
         console.log('ready!')
 
