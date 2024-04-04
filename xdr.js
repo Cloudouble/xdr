@@ -303,6 +303,8 @@ function createEnum(body, name) {
     }
 }
 
+const boolType = createEnum([false, true], 'boolType')
+
 function parseX(xCode, className) {
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
@@ -447,15 +449,42 @@ function parseX(xCode, className) {
             } else if (type in this.manifest.typedefs) {
                 result = this.serialize(value, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
             } else if (type in this.manifest.structs) {
-                const chunks = []
-                let totalLength = 0
-                for (const [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-                    const chunk = this.serialize(value[identifier], undefined, identifierDeclaration)
-                    chunks.push([chunk, totalLength])
-                    totalLength += chunk.length
+                const serializeStructItem = (itemValue) => {
+                    const itemChunks = []
+                    let itemTotalLength = 0
+                    for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
+                        console.log('line 454', identifier, identifierDeclaration)
+                        if (identifierDeclaration.optional) {
+                            const hasField = itemValue[identifier] !== undefined, hasFieldBool = new boolType(hasField)
+                            console.log('line 459', hasField, hasFieldBool.bytes)
+                            itemChunks.push([hasFieldBool.bytes, itemTotalLength])
+                            itemTotalLength += 4
+                            if (!hasField) continue
+                            identifierDeclaration = { ...identifierDeclaration, optional: undefined }
+                        }
+                        const chunk = this.serialize(itemValue[identifier], undefined, identifierDeclaration)
+                        itemChunks.push([chunk, itemTotalLength])
+                        itemTotalLength += chunk.length
+                    }
+                    const itemResult = new Uint8Array(itemTotalLength)
+                    console.log('line 470', itemChunks)
+                    for (const chunk of itemChunks) itemResult.set(...chunk)
+                    console.log('line 472', itemResult)
+                    return itemResult
                 }
-                result = new Uint8Array(totalLength)
-                for (const chunk of chunks) result.set(...chunk)
+                if (Array.isArray(value)) {
+                    const chunks = [[new intType(value.length).bytes, 4]]
+                    let totalLength = 4
+                    for (const item of value) {
+                        const chunk = serializeStructItem(item)
+                        chunks.push([chunk, totalLength])
+                        totalLength += chunk.length
+                    }
+                    result = new Uint8Array(totalLength)
+                    for (const chunk of chunks) result.set(...chunk)
+                } else {
+                    result = serializeStructItem(value)
+                }
             } else if (type in this.manifest.unions) {
                 const unionManifest = this.manifest.unions[type], enumIdentifier = value[unionManifest.discriminant.value],
                     enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type), discriminantBytes = (new enumClass(enumIdentifier)).bytes,
@@ -644,7 +673,7 @@ const XDR = {
         return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef)))
     },
     types: {
-        typedef: TypeDef,
+        typedef: TypeDef, bool: boolType,
         int: intType, hyper: hyperType, float: floatType, double: doubleType,
         opaque: opaqueType, string: stringType, void: voidType
     },
@@ -654,7 +683,6 @@ const XDR = {
         }
     }
 }
-XDR.types.bool = XDR.createEnum([false, true], 'bool')
 
 export default XDR
 
