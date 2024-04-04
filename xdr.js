@@ -449,7 +449,7 @@ function parseX(xCode, className) {
             } else if (type in this.manifest.structs) {
                 const chunks = []
                 let totalLength = 0
-                for (const [identifier, identifierDeclaration] of declaration.entries()) {
+                for (const [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
                     const chunk = this.serialize(value[identifier], undefined, identifierDeclaration)
                     chunks.push([chunk, totalLength])
                     totalLength += chunk.length

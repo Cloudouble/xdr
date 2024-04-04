@@ -94,11 +94,8 @@
                 entry: 'TransactionEnvelope', type: 'Transaction'
             }),
 
-            operation: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
-                entry: 'Operation', type: 'Operation'
-            }),
             temp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
-                entry: 'int64', type: true
+                entry: 'Operation', type: true
             }),
 
 
