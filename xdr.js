@@ -449,7 +449,7 @@ function parseX(xCode, className) {
             } else if (type in this.manifest.typedefs) {
                 result = this.serialize(value, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
             } else if (type in this.manifest.structs) {
-                const serializeStructItem = (itemValue) => {
+                const serializeStructItem = itemValue => {
                     const itemChunks = []
                     let itemTotalLength = 0
                     for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
@@ -483,12 +483,29 @@ function parseX(xCode, className) {
                     result = serializeStructItem(value)
                 }
             } else if (type in this.manifest.unions) {
-                const unionManifest = this.manifest.unions[type], enumIdentifier = value[unionManifest.discriminant.value],
-                    enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type), discriminantBytes = (new enumClass(enumIdentifier)).bytes,
-                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(value[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier])
-                result = new Uint8Array(discriminantBytes.length + armBytes.length)
-                result.set(discriminantBytes, 0)
-                result.set(armBytes, discriminantBytes.length)
+                const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
+                const serializeUnionItem = itemValue => {
+                    const enumIdentifier = itemValue[unionManifest.discriminant.value], discriminantBytes = (new enumClass(enumIdentifier)).bytes,
+                        armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier])
+                    const itemResult = new Uint8Array(discriminantBytes.length + armBytes.length)
+                    itemResult.set(discriminantBytes, 0)
+                    itemResult.set(armBytes, discriminantBytes.length)
+                    return itemResult
+                }
+                if (Array.isArray(value)) {
+                    let totalLength = 0
+                    const chunks = [[new intType(value.length).bytes, totalLength]]
+                    totalLength += 4
+                    for (const item of value) {
+                        const chunk = serializeUnionItem(item)
+                        chunks.push([chunk, totalLength])
+                        totalLength += chunk.length
+                    }
+                    result = new Uint8Array(totalLength)
+                    for (const chunk of chunks) result.set(...chunk)
+                } else {
+                    result = serializeUnionItem(value)
+                }
             }
             return result
         }
