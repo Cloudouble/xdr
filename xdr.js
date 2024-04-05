@@ -696,8 +696,8 @@ const XDR = {
         return this.types[typeKey] = typeClass
     },
     export: function (namespace) {
-        const source = namespace ? this.types[namespace] : this.types, retval = {}
-        for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) retval[v] = JSON.parse(JSON.stringify(v.manifest))
+        const source = namespace ? this.types[namespace] : this.types, retval = []
+        for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) retval.push(JSON.parse(JSON.stringify(v.manifest)))
         return retval
     },
     load: async function (types, options = [], defaultOptions = {}) {
