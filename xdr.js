@@ -305,6 +305,215 @@ function createEnum(body, name) {
 
 const boolType = createEnum([false, true], 'boolType')
 
+const flattenManifestStructs = manifest => {
+    const retval = { ...manifest }
+    for (const structName in { ...retval.structs }) {
+        retval.structs[structName] ||= {}
+        for (const [k, v] of retval.structs[structName].entries()) retval.structs[structName][k] = v
+    }
+    return retval
+}
+
+const BaseClass = class extends TypeDef {
+
+    static name
+    static namespace
+    static entry
+
+    static manifest = {
+        toJSON: function () { return flattenManifestStructs(this) }
+    }
+
+    static serialize(value, instance, declaration) {
+        let type = declaration?.type ?? this.manifest.entry
+        declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
+        let result
+        if (type in XDR.types) {
+            result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
+        } else if (type in this.manifest.typedefs) {
+            if (Array.isArray(value) && declaration.mode && declaration.length) {
+                let totalLength = 0
+                const chunks = [[new intType(value.length).bytes, totalLength]]
+                totalLength += 4
+                for (const item of value) {
+                    const chunk = this.serialize(item, undefined, { ...declaration, mode: undefined, length: undefined })
+                    chunks.push([chunk, totalLength])
+                    totalLength += chunk.length
+                }
+                result = new Uint8Array(totalLength)
+                for (const chunk of chunks) result.set(...chunk)
+            } else {
+                result = this.serialize(value, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
+            }
+        } else if (type in this.manifest.structs) {
+            const serializeStructItem = itemValue => {
+                const itemChunks = []
+                let itemTotalLength = 0
+                for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
+                    if (identifierDeclaration.optional) {
+                        const hasField = itemValue[identifier] !== undefined, hasFieldBool = new boolType(hasField)
+                        itemChunks.push([hasFieldBool.bytes, itemTotalLength])
+                        itemTotalLength += 4
+                        if (!hasField) continue
+                        identifierDeclaration = { ...identifierDeclaration, optional: undefined }
+                    }
+                    const chunk = this.serialize(itemValue[identifier], undefined, identifierDeclaration)
+                    itemChunks.push([chunk, itemTotalLength])
+                    itemTotalLength += chunk.length
+                }
+                const itemResult = new Uint8Array(itemTotalLength)
+                for (const chunk of itemChunks) itemResult.set(...chunk)
+                return itemResult
+            }
+            if (Array.isArray(value)) {
+                let totalLength = 0
+                const chunks = [[new intType(value.length).bytes, totalLength]]
+                totalLength += 4
+                for (const item of value) {
+                    const chunk = serializeStructItem(item)
+                    chunks.push([chunk, totalLength])
+                    totalLength += chunk.length
+                }
+                result = new Uint8Array(totalLength)
+                for (const chunk of chunks) result.set(...chunk)
+            } else {
+                result = serializeStructItem(value)
+            }
+        } else if (type in this.manifest.unions) {
+            const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
+            const serializeUnionItem = itemValue => {
+                const enumIdentifier = itemValue[unionManifest.discriminant.value], discriminantBytes = (new enumClass(enumIdentifier)).bytes,
+                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier])
+                const itemResult = new Uint8Array(discriminantBytes.length + armBytes.length)
+                itemResult.set(discriminantBytes, 0)
+                itemResult.set(armBytes, discriminantBytes.length)
+                return itemResult
+            }
+            if (Array.isArray(value)) {
+                let totalLength = 0
+                const chunks = [[new intType(value.length).bytes, totalLength]]
+                totalLength += 4
+                for (const item of value) {
+                    const chunk = serializeUnionItem(item)
+                    chunks.push([chunk, totalLength])
+                    totalLength += chunk.length
+                }
+                result = new Uint8Array(totalLength)
+                for (const chunk of chunks) result.set(...chunk)
+            } else {
+                result = serializeUnionItem(value)
+            }
+        }
+        return result
+    }
+
+    static deserialize(bytes, instance, declaration, raw, isArrayItem) {
+        const type = declaration?.type ?? this.manifest.entry
+        declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
+        let result
+        if (type in XDR.types) {
+            result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
+        } else if (type in this.manifest.typedefs) {
+            result = this.deserialize(bytes, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
+        } else if (type in this.manifest.structs) {
+            const value = {}
+            let byteLength = 0, entryResult
+            for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
+                if (isArrayItem) {
+                    identifierDeclaration = { ...identifierDeclaration }
+                    delete identifierDeclaration.length
+                    delete identifierDeclaration.mode
+                }
+                const { length: declarationLength, mode: declarationMode, type: declarationType, optional: declarationOptional } = identifierDeclaration
+                if (declarationOptional) {
+                    const hasField = !!this.getView(bytes).getUint32(0, false)
+                    bytes = bytes.subarray(4)
+                    byteLength += 4
+                    if (!hasField) continue
+                }
+                if (declarationLength && !(declarationType in XDR.types)) {
+                    const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
+                    if (declarationMode === 'variable') {
+                        bytes = bytes.subarray(4)
+                        byteLength += 4
+                        if (declarationVariableLength > declarationLength) throw new Error('variable length exceeds declaration length')
+                    }
+                    entryResult = new Array(declarationVariableLength)
+                    for (const i of entryResult.keys()) {
+                        const indexResult = this.deserialize(bytes, undefined, { ...identifierDeclaration, length: undefined, mode: undefined }, true, true)
+                        byteLength += indexResult.bytes.byteLength
+                        entryResult[i] = indexResult.value
+                        bytes = bytes.subarray(indexResult.bytes.byteLength)
+                    }
+                    value[identifier] = entryResult
+                } else {
+                    entryResult = this.deserialize(bytes, undefined, identifierDeclaration, true)
+                    byteLength += entryResult.bytes.byteLength
+                    value[identifier] = entryResult.value
+                    bytes = bytes.subarray(entryResult.bytes.byteLength)
+                }
+            }
+            result = { value, bytes: { byteLength } }
+        } else if (type in this.manifest.unions) {
+            let byteLength = 0
+            const unionManifest = this.manifest.unions[type]
+            const enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
+            const enumValue = this.getView(bytes).getUint32(0, false)
+            bytes = bytes.subarray(4)
+            byteLength += 4
+            let discriminantInstance
+            try {
+                discriminantInstance = new enumClass(enumValue)
+            } catch (e) {
+                discriminantInstance = new enumClass(0)
+            }
+            let armDeclaration = unionManifest.arms[discriminantInstance.identifier], armResult
+            if (armDeclaration === undefined) {
+                discriminantInstance = new enumClass(0)
+                armDeclaration = unionManifest.arms[discriminantInstance.identifier]
+            }
+            const value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
+            if (isArrayItem) {
+                armDeclaration = { ...armDeclaration }
+                delete armDeclaration.length
+                delete armDeclaration.mode
+            }
+            const { length: armLength, mode: armMode, type: armType, identifier } = armDeclaration
+            if (armLength && !(armType in XDR.types)) {
+                const armVariableLength = armMode === 'variable' ? this.getView(bytes).getUint32(0, false) : armLength
+                if (armMode === 'variable') {
+                    bytes = bytes.subarray(4)
+                    byteLength += 4
+                    if (armVariableLength > armLength) throw new Error('variable length exceeds arm declaration length')
+                }
+                armResult = new Array(armVariableLength)
+                for (const i of armResult.keys()) {
+                    const indexResult = this.deserialize(bytes, undefined, { ...armDeclaration, length: undefined, mode: undefined }, true, true)
+                    byteLength += indexResult.bytes.byteLength
+                    armResult[i] = indexResult.value
+                    bytes = bytes.subarray(indexResult.bytes.byteLength)
+                }
+                if (identifier) value[identifier] = armResult
+            } else {
+                armResult = this.deserialize(bytes, undefined, armDeclaration, true)
+                byteLength += armResult.bytes.byteLength
+                if (identifier) value[identifier] = armResult.value
+                bytes = bytes.subarray(armResult.bytes.byteLength)
+            }
+            result = { value, bytes: { byteLength } }
+        }
+        return raw ? result : result.value
+    }
+
+    consume(bytes) {
+        const newBytes = bytes.slice(0), testValue = this.constructor.deserialize(newBytes, undefined, undefined, true)
+        if (this.value === undefined) this.value = testValue.value
+        return bytes.subarray(0, testValue.bytes.byteLength)
+    }
+
+}
+
+
 function parseX(xCode, className) {
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
@@ -421,214 +630,17 @@ function parseX(xCode, className) {
     for (const name of Object.keys(structs).concat(Object.keys(unions))) if (!dependedTypes.has(name)) { entry = name; break }
     if (!entry) throw new Error('no entry found')
 
-    const typeClass = class extends TypeDef {
-
+    const typeClass = class extends BaseClass {
         static name = className
         static namespace = namespace
         static entry = entry
 
         static manifest = {
+            ...this.manifest,
             name: this.name, namespace: this.namespace, entry: this.entry,
             constants, enums, typedefs, unions, structs,
-            toJSON: function () {
-                const retval = { ...this }
-                for (const structName in { ...retval.structs }) {
-                    retval.structs[structName] ||= {}
-                    for (const [k, v] of retval.structs[structName].entries()) retval.structs[structName][k] = v
-                }
-                return retval
-            }
         }
-
-        static serialize(value, instance, declaration) {
-            let type = declaration?.type ?? this.manifest.entry
-            declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
-            let result
-            if (type in XDR.types) {
-                result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
-            } else if (type in this.manifest.typedefs) {
-                if (Array.isArray(value) && declaration.mode && declaration.length) {
-                    let totalLength = 0
-                    const chunks = [[new intType(value.length).bytes, totalLength]]
-                    totalLength += 4
-                    for (const item of value) {
-                        const chunk = this.serialize(item, undefined, { ...declaration, mode: undefined, length: undefined })
-                        chunks.push([chunk, totalLength])
-                        totalLength += chunk.length
-                    }
-                    result = new Uint8Array(totalLength)
-                    for (const chunk of chunks) result.set(...chunk)
-                } else {
-                    result = this.serialize(value, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
-                }
-            } else if (type in this.manifest.structs) {
-                const serializeStructItem = itemValue => {
-                    const itemChunks = []
-                    let itemTotalLength = 0
-                    for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-                        if (identifierDeclaration.optional) {
-                            const hasField = itemValue[identifier] !== undefined, hasFieldBool = new boolType(hasField)
-                            itemChunks.push([hasFieldBool.bytes, itemTotalLength])
-                            itemTotalLength += 4
-                            if (!hasField) continue
-                            identifierDeclaration = { ...identifierDeclaration, optional: undefined }
-                        }
-                        const chunk = this.serialize(itemValue[identifier], undefined, identifierDeclaration)
-                        itemChunks.push([chunk, itemTotalLength])
-                        itemTotalLength += chunk.length
-                    }
-                    const itemResult = new Uint8Array(itemTotalLength)
-                    for (const chunk of itemChunks) itemResult.set(...chunk)
-                    return itemResult
-                }
-                if (Array.isArray(value)) {
-                    let totalLength = 0
-                    const chunks = [[new intType(value.length).bytes, totalLength]]
-                    totalLength += 4
-                    for (const item of value) {
-                        const chunk = serializeStructItem(item)
-                        chunks.push([chunk, totalLength])
-                        totalLength += chunk.length
-                    }
-                    result = new Uint8Array(totalLength)
-                    for (const chunk of chunks) result.set(...chunk)
-                } else {
-                    result = serializeStructItem(value)
-                }
-            } else if (type in this.manifest.unions) {
-                const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
-                const serializeUnionItem = itemValue => {
-                    const enumIdentifier = itemValue[unionManifest.discriminant.value], discriminantBytes = (new enumClass(enumIdentifier)).bytes,
-                        armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier])
-                    const itemResult = new Uint8Array(discriminantBytes.length + armBytes.length)
-                    itemResult.set(discriminantBytes, 0)
-                    itemResult.set(armBytes, discriminantBytes.length)
-                    return itemResult
-                }
-                if (Array.isArray(value)) {
-                    let totalLength = 0
-                    const chunks = [[new intType(value.length).bytes, totalLength]]
-                    totalLength += 4
-                    for (const item of value) {
-                        const chunk = serializeUnionItem(item)
-                        chunks.push([chunk, totalLength])
-                        totalLength += chunk.length
-                    }
-                    result = new Uint8Array(totalLength)
-                    for (const chunk of chunks) result.set(...chunk)
-                } else {
-                    result = serializeUnionItem(value)
-                }
-            }
-            return result
-        }
-
-        static deserialize(bytes, instance, declaration, raw, isArrayItem) {
-            const type = declaration?.type ?? this.manifest.entry
-            declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
-            let result
-            if (type in XDR.types) {
-                result = (new XDR.types[type](bytes, ...XDR.types[type].additionalArgs.map(a => declaration[a])))
-            } else if (type in this.manifest.typedefs) {
-                result = this.deserialize(bytes, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
-            } else if (type in this.manifest.structs) {
-                const value = {}
-                let byteLength = 0, entryResult
-                for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-                    if (isArrayItem) {
-                        identifierDeclaration = { ...identifierDeclaration }
-                        delete identifierDeclaration.length
-                        delete identifierDeclaration.mode
-                    }
-                    const { length: declarationLength, mode: declarationMode, type: declarationType, optional: declarationOptional } = identifierDeclaration
-                    if (declarationOptional) {
-                        const hasField = !!this.getView(bytes).getUint32(0, false)
-                        bytes = bytes.subarray(4)
-                        byteLength += 4
-                        if (!hasField) continue
-                    }
-                    if (declarationLength && !(declarationType in XDR.types)) {
-                        const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
-                        if (declarationMode === 'variable') {
-                            bytes = bytes.subarray(4)
-                            byteLength += 4
-                            if (declarationVariableLength > declarationLength) throw new Error('variable length exceeds declaration length')
-                        }
-                        entryResult = new Array(declarationVariableLength)
-                        for (const i of entryResult.keys()) {
-                            const indexResult = this.deserialize(bytes, undefined, { ...identifierDeclaration, length: undefined, mode: undefined }, true, true)
-                            byteLength += indexResult.bytes.byteLength
-                            entryResult[i] = indexResult.value
-                            bytes = bytes.subarray(indexResult.bytes.byteLength)
-                        }
-                        value[identifier] = entryResult
-                    } else {
-                        entryResult = this.deserialize(bytes, undefined, identifierDeclaration, true)
-                        byteLength += entryResult.bytes.byteLength
-                        value[identifier] = entryResult.value
-                        bytes = bytes.subarray(entryResult.bytes.byteLength)
-                    }
-                }
-                result = { value, bytes: { byteLength } }
-            } else if (type in this.manifest.unions) {
-                let byteLength = 0
-                const unionManifest = this.manifest.unions[type]
-                const enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
-                const enumValue = this.getView(bytes).getUint32(0, false)
-                bytes = bytes.subarray(4)
-                byteLength += 4
-                let discriminantInstance
-                try {
-                    discriminantInstance = new enumClass(enumValue)
-                } catch (e) {
-                    discriminantInstance = new enumClass(0)
-                }
-                let armDeclaration = unionManifest.arms[discriminantInstance.identifier], armResult
-                if (armDeclaration === undefined) {
-                    discriminantInstance = new enumClass(0)
-                    armDeclaration = unionManifest.arms[discriminantInstance.identifier]
-                }
-                const value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
-                if (isArrayItem) {
-                    armDeclaration = { ...armDeclaration }
-                    delete armDeclaration.length
-                    delete armDeclaration.mode
-                }
-                const { length: armLength, mode: armMode, type: armType, identifier } = armDeclaration
-                if (armLength && !(armType in XDR.types)) {
-                    const armVariableLength = armMode === 'variable' ? this.getView(bytes).getUint32(0, false) : armLength
-                    if (armMode === 'variable') {
-                        bytes = bytes.subarray(4)
-                        byteLength += 4
-                        if (armVariableLength > armLength) throw new Error('variable length exceeds arm declaration length')
-                    }
-                    armResult = new Array(armVariableLength)
-                    for (const i of armResult.keys()) {
-                        const indexResult = this.deserialize(bytes, undefined, { ...armDeclaration, length: undefined, mode: undefined }, true, true)
-                        byteLength += indexResult.bytes.byteLength
-                        armResult[i] = indexResult.value
-                        bytes = bytes.subarray(indexResult.bytes.byteLength)
-                    }
-                    if (identifier) value[identifier] = armResult
-                } else {
-                    armResult = this.deserialize(bytes, undefined, armDeclaration, true)
-                    byteLength += armResult.bytes.byteLength
-                    if (identifier) value[identifier] = armResult.value
-                    bytes = bytes.subarray(armResult.bytes.byteLength)
-                }
-                result = { value, bytes: { byteLength } }
-            }
-            return raw ? result : result.value
-        }
-
-        consume(bytes) {
-            const newBytes = bytes.slice(0), testValue = this.constructor.deserialize(newBytes, undefined, undefined, true)
-            if (this.value === undefined) this.value = testValue.value
-            return bytes.subarray(0, testValue.bytes.byteLength)
-        }
-
     }
-
     return typeClass
 
 }
@@ -682,6 +694,43 @@ const XDR = {
             return this.types[typeClass.namespace][typeKey] = typeClass
         }
         return this.types[typeKey] = typeClass
+    },
+    export: function (namespace) {
+        const source = namespace ? this.types[namespace] : this.types, retval = {}
+        for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) retval[v] = JSON.parse(JSON.stringify(v.manifest))
+        return retval
+    },
+    load: async function (types, options = [], defaultOptions = {}) {
+        if (!Array.isArray(types)) types = [types].filter(t => !!t)
+        if (!Array.isArray(options)) options = [options].map(opt => (opt instanceof Object) ? { ...opt, ...defaultOptions } : { ...defaultOptions })
+        for (let [index, type] of types.entries) {
+            const typeOptions = { ...(options[index] ?? defaultOptions) }
+            if (typeof type === 'string') type = await this.factory(type, typeOptions)
+            if (!(type.prototype && (type.prototype instanceof TypeDef)) && type instanceof Object) {
+                type = class extends BaseClass {
+                    static name = typeOptions.name
+                    static namespace = typeOptions.namespace
+                    static entry = typeOptions.entry
+
+                    static manifest = {
+                        ...this.manifest,
+                        name: this.name, namespace: this.namespace, entry: this.entry,
+                        constants: type?.constants ?? {},
+                        enums: type?.enums ?? {},
+                        typedefs: type?.typedefs ?? {},
+                        unions: type?.unions ?? {},
+                        structs: type?.structs ?? {},
+                    }
+                }
+            }
+            const typeKey = type.name ?? typeOptions.name
+            if (type.namespace) {
+                this.types[type.namespace] ||= {}
+                this.types[type.namespace][typeKey] = type
+            } else {
+                this.types[typeKey] = type
+            }
+        }
     },
     deserialize: function (bytes, typedef) {
         typedef = resolveTypeDef(typedef)
