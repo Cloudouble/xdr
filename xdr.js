@@ -627,12 +627,12 @@ const XDR = {
         let includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? document.baseURI
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
         let typeKey, isURL = !str.includes(';')
-        if (options?.entry && (options?.type === true)) options.type = options.entry
+        if (options?.entry && (options?.name === true)) options.name = options.entry
         if (isURL) {
             str = new URL(str, document.baseURI).href
-            typeKey = options?.type ?? str
+            typeKey = options?.name ?? str
         } else {
-            typeKey = options?.type ?? Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
+            typeKey = options?.name ?? Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
                 x => (('00' + x.toString(16)).slice(-2))).join('')
         }
         if (namespace) {

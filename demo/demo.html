@@ -91,7 +91,7 @@
             ledger: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x'),
             overlay: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x'),
             ['transaction-envelope']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
-                entry: 'TransactionEnvelope', type: 'TransactionEnvelope'
+                entry: 'TransactionEnvelope', name: 'TransactionEnvelope'
             }),
             types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
         }
@@ -118,11 +118,17 @@
         }
         for (const [id, textContent] of Object.entries(examples)) (document.getElementById(id)?.querySelector('pre') || {}).textContent = textContent
 
-
-        window.test = XDR.parse("AAAAAgAAAADQ4EXnhaIfsfpoirqsiyKJXBQSdugTmhDCuH/YNLMvAAAPQkAAC/dBAAAAHQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAABAAAAABB90WssODNIgi6BHveqzxTRmIpvAFRyVNM+Hm2GVuCcAAAAAAAAAACYNt0d1NQkO5kwaqbCmmgtNzKaTksll+wCMZ4jqmN8cgAAABdIdugAAAAAAAAAAAI0sy8AAAAAQGMeEFJjJmWYYOM9VkLmM08tYI9Dry4fP44Hx5gslpHbw78zaSaPjBMIR57AmWNxuiUL+5AEWNiZ8Zt0m4Qv/guGVuCcAAAAQNZtFL3C9sQD6jTSCJJOaLMkDbUwu9zXriUNJJYKLzZ2D4mdQyjSu3icS+73RMqbAGiG5Vao9LNeMlL9HEkHnAA=", XDR.types.stellar.TransactionEnvelope)
-
-        console.log('ready!')
-
+        const stellarParseElement = document.getElementById('stellar-parse'), stellarStringifyElement = document.getElementById('stellar-stringify'),
+            showTransactionObject = sourceElement => {
+                const transactionEnvelope = XDR.parse(sourceElement.value || sourceElement.getAttribute('placeholder'), XDR.types.stellar.TransactionEnvelope)
+                stellarParseElement.querySelector('pre').textContent = JSON.stringify(transactionEnvelope, (k, v) => typeof v === 'bigint' ? v.toString() : v, 4)
+                stellarStringifyElement.querySelector('pre').textContent = XDR.stringify(transactionEnvelope, XDR.types.stellar.TransactionEnvelope)
+                console.log('transactionEnvelope: ', transactionEnvelope)
+            }, sourceElement = stellarParseElement.querySelector('textarea')
+        sourceElement.addEventListener('change', event => {
+            showTransactionObject(event.target)
+        })
+        showTransactionObject(sourceElement)
     </script>
 
 </head>
@@ -198,31 +204,29 @@
                 <pre class="result"></pre>
             </section>
         </details>
-
-
-        <details open>
+        <details>
             <summary>
-                <h2>Stellar Specific Features</h2>
-                <p>This section includes specific non-standard extensions that are required to correctly work
-                    with data types used by the <a href="https://stellar.org">Stellar network</a>. The XDR definition
-                    files are sourced from <a
-                        href="https://github.com/stellar/stellar-xdr">https://github.com/stellar/stellar-xdr</a>.
-                </p>
-                <p>The generated classes are shown as the value of their `manifest` property, this is a
-                    generated map of the contained data structures within the type class and can be cross-referenced
-                    with the .X file code. Once class is created per entry .X type definition file. The `factory`
-                    function shown below do
-                    NOT product this output, but rather produce a type class that reflects the structures outlined in
-                    the manifest shown. The type classes produced can be used as part of the deserialize, serialize,
-                    parse, stringify
-                    operations and the object creation processes as shown above.
-                </p>
-                <p>For real-world usage, it be advisable to copy the .x files locally and link to your own copies,
-                    rather than
-                    using the Github file links as shown here, these Github links are only useful for learning and rapid
-                    prototyping.
-                </p>
+                <h2>Stellar Specific Features - Types</h2>
             </summary>
+            <p>This section includes specific non-standard extensions that are required to correctly work
+                with data types used by the <a href="https://stellar.org">Stellar network</a>. The XDR definition
+                files are sourced from <a
+                    href="https://github.com/stellar/stellar-xdr">https://github.com/stellar/stellar-xdr</a>.
+            </p>
+            <p>The generated classes are shown as the value of their `manifest` property, this is a
+                generated map of the contained data structures within the type class and can be cross-referenced
+                with the .X file code. Once class is created per entry .X type definition file. The `factory`
+                function shown below do
+                NOT product this output, but rather produce a type class that reflects the structures outlined in
+                the manifest shown. The type classes produced can be used as part of the deserialize, serialize,
+                parse, stringify
+                operations and the object creation processes as shown above.
+            </p>
+            <p>For real-world usage, it be advisable to copy the .x files locally and link to your own copies,
+                rather than
+                using the Github file links as shown here, these Github links are only useful for learning and rapid
+                prototyping.
+            </p>
             <section id="stellar-scp">
                 <h3>Stellar-SCP.x</h3>
                 <p>...</p>
@@ -293,11 +297,14 @@
                     class="example">stellarOverlayType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x')</code>
                 <pre class="result"></pre>
             </section>
-            <section id="stellar-transaction">
+            <section id="stellar-transaction-envelope">
                 <h3>Stellar-transaction.x</h3>
                 <p></p>
-                <code
-                    class="example">stellarTransactionType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x')</code>
+                <code class="example">
+stellarTransactionEnvelopeType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
+    entry: 'TransactionEnvelope', name: 'TransactionEnvelope'
+})
+                </code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-types">
@@ -309,7 +316,34 @@
                 <pre class="result"></pre>
             </section>
         </details>
-
+        <details>
+            <summary>
+                <h2>Stellar Specific Features - Transaction Parsing</h2>
+            </summary>
+            <section id="stellar-parse">
+                <p>Parse a base64 encoded string of bytes into a conforming transaction envelope object</p>
+                <p>Note: some properties may be of <a
+                        href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt">BigInt</a>
+                    type
+                    and are shown here as strings - in order for the corresponding "stringify" method to work (as in
+                    next section)
+                    these values must be of the correct types. View the browser console of this page for examples of the
+                    correct
+                    types that must be used for stringification.</p>
+                </p>
+                <textarea
+                    placeholder="AAAAAgAAAADQ4EXnhaIfsfpoirqsiyKJXBQSdugTmhDCuH/YNLMvAAAPQkAAC/dBAAAAHQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAABAAAAABB90WssODNIgi6BHveqzxTRmIpvAFRyVNM+Hm2GVuCcAAAAAAAAAACYNt0d1NQkO5kwaqbCmmgtNzKaTksll+wCMZ4jqmN8cgAAABdIdugAAAAAAAAAAAI0sy8AAAAAQGMeEFJjJmWYYOM9VkLmM08tYI9Dry4fP44Hx5gslpHbw78zaSaPjBMIR57AmWNxuiUL+5AEWNiZ8Zt0m4Qv/guGVuCcAAAAQNZtFL3C9sQD6jTSCJJOaLMkDbUwu9zXriUNJJYKLzZ2D4mdQyjSu3icS+73RMqbAGiG5Vao9LNeMlL9HEkHnAA="></textarea>
+                <code
+                    class="example">transactionEnvelope = XDR.parse(base64EncodedBytes, stellarTransactionEnvelopeType)</code>
+                <pre class="result"></pre>
+            </section>
+            <section id="stellar-stringify">
+                <p>Stringify a conforming transaction envelope to a base64 encoded string of bytes</p>
+                <code
+                    class="example">base64EncodedBytes = XDR.stringify(transactionEnvelope, stellarTransactionEnvelopeType)</code>
+                <pre class="result"></pre>
+            </section>
+        </details>
     </main>
 
     <footer>
