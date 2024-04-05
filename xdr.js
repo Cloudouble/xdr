@@ -447,7 +447,20 @@ function parseX(xCode, className) {
             if (type in XDR.types) {
                 result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
             } else if (type in this.manifest.typedefs) {
-                result = this.serialize(value, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
+                if (Array.isArray(value) && declaration.mode && declaration.length) {
+                    let totalLength = 0
+                    const chunks = [[new intType(value.length).bytes, totalLength]]
+                    totalLength += 4
+                    for (const item of value) {
+                        const chunk = this.serialize(item, undefined, { ...declaration, mode: undefined, length: undefined })
+                        chunks.push([chunk, totalLength])
+                        totalLength += chunk.length
+                    }
+                    result = new Uint8Array(totalLength)
+                    for (const chunk of chunks) result.set(...chunk)
+                } else {
+                    result = this.serialize(value, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
+                }
             } else if (type in this.manifest.structs) {
                 const serializeStructItem = itemValue => {
                     const itemChunks = []
