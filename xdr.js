@@ -722,19 +722,20 @@ const XDR = {
             const typeOptions = { ...(options[typeKey] ?? defaultOptions) }
             if (typeof type === 'string') type = await this.factory(type, typeOptions)
             if (!(type.prototype && (type.prototype instanceof TypeDef)) && type instanceof Object) {
+                const typeManifest = { ...type }
                 type = class extends BaseClass {
-                    static name = typeOptions.name
-                    static namespace = typeOptions.namespace
-                    static entry = typeOptions.entry
+                    static name = typeOptions.name ?? typeManifest.name
+                    static namespace = typeOptions.namespace ?? typeManifest.namespace
+                    static entry = typeOptions.entry ?? typeManifest.entry
 
                     static manifest = {
                         ...BaseClass.manifest,
                         name: this.name, namespace: this.namespace, entry: this.entry,
-                        constants: type?.constants ?? {},
-                        enums: type?.enums ?? {},
-                        typedefs: type?.typedefs ?? {},
-                        unions: type?.unions ?? {},
-                        structs: type?.structs ?? {}
+                        constants: typeManifest?.constants ?? {},
+                        enums: typeManifest?.enums ?? {},
+                        structs: Object.fromEntries(Object.entries(typeManifest?.structs ?? {}).map(([k, v]) => [k, new Map(v)])),
+                        typedefs: typeManifest?.typedefs ?? {},
+                        unions: typeManifest?.unions ?? {},
                     }
                 }
                 Object.defineProperty(type.manifest, 'toJSON', { value: function () { return manifestToJson(type.manifest) } })
