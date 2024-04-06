@@ -305,11 +305,24 @@ function createEnum(body, name) {
 
 const boolType = createEnum([false, true], 'boolType')
 
-const flattenManifestStructs = manifest => {
-    const retval = { ...manifest }
-    for (const structName in { ...retval.structs }) {
-        retval.structs[structName] ||= {}
-        for (const [k, v] of retval.structs[structName].entries()) retval.structs[structName][k] = v
+const manifestToJson = manifest => {
+    const retval = {}
+    for (const manifestKey in manifest) {
+        if (manifest[manifestKey] == undefined) continue
+        switch (typeof manifest[manifestKey]) {
+            case 'function': continue
+            case 'object':
+                if (manifestKey === 'structs') {
+                    retval.structs = {}
+                    for (const structName in manifest.structs) {
+                        retval.structs[structName] = JSON.parse(JSON.stringify(Array.from(manifest.structs[structName].entries())))
+                    }
+                    continue
+                }
+                retval[manifestKey] = JSON.parse(JSON.stringify(manifest[manifestKey]))
+            default:
+                retval[manifestKey] = manifest[manifestKey]
+        }
     }
     return retval
 }
@@ -320,9 +333,7 @@ const BaseClass = class extends TypeDef {
     static namespace
     static entry
 
-    static manifest = {
-        toJSON: function () { return flattenManifestStructs(this) }
-    }
+    static manifest = {}
 
     static serialize(value, instance, declaration) {
         let type = declaration?.type ?? this.manifest.entry
@@ -512,6 +523,7 @@ const BaseClass = class extends TypeDef {
     }
 
 }
+Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
 
 function parseX(xCode, className) {
@@ -636,11 +648,13 @@ function parseX(xCode, className) {
         static entry = entry
 
         static manifest = {
-            ...this.manifest,
+            ...BaseClass.manifest,
             name: this.name, namespace: this.namespace, entry: this.entry,
             constants, enums, typedefs, unions, structs,
         }
     }
+    Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
+
     return typeClass
 
 }
@@ -696,15 +710,16 @@ const XDR = {
         return this.types[typeKey] = typeClass
     },
     export: function (namespace) {
-        const source = namespace ? this.types[namespace] : this.types, retval = []
-        for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) retval.push(JSON.parse(JSON.stringify(v.manifest)))
+        const source = namespace ? this.types[namespace] : this.types, retval = {}
+        for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) retval[k] = JSON.parse(JSON.stringify(v.manifest))
         return retval
     },
-    load: async function (types, options = [], defaultOptions = {}) {
-        if (!Array.isArray(types)) types = [types].filter(t => !!t)
-        if (!Array.isArray(options)) options = [options].map(opt => (opt instanceof Object) ? { ...opt, ...defaultOptions } : { ...defaultOptions })
-        for (let [index, type] of types.entries) {
-            const typeOptions = { ...(options[index] ?? defaultOptions) }
+    load: async function (types = {}, options = {}, defaultOptions = {}) {
+        if (!types || (typeof types !== 'object')) throw new Error('types must be an object')
+        if (typeof types !== 'object') throw new Error('options must be an object')
+        if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
+        for (let [typeKey, type] of Object.entries(types)) {
+            const typeOptions = { ...(options[typeKey] ?? defaultOptions) }
             if (typeof type === 'string') type = await this.factory(type, typeOptions)
             if (!(type.prototype && (type.prototype instanceof TypeDef)) && type instanceof Object) {
                 type = class extends BaseClass {
@@ -713,17 +728,17 @@ const XDR = {
                     static entry = typeOptions.entry
 
                     static manifest = {
-                        ...this.manifest,
+                        ...BaseClass.manifest,
                         name: this.name, namespace: this.namespace, entry: this.entry,
                         constants: type?.constants ?? {},
                         enums: type?.enums ?? {},
                         typedefs: type?.typedefs ?? {},
                         unions: type?.unions ?? {},
-                        structs: type?.structs ?? {},
+                        structs: type?.structs ?? {}
                     }
                 }
+                Object.defineProperty(type.manifest, 'toJSON', { value: function () { return manifestToJson(type.manifest) } })
             }
-            const typeKey = type.name ?? typeOptions.name
             if (type.namespace) {
                 this.types[type.namespace] ||= {}
                 this.types[type.namespace][typeKey] = type
