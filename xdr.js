@@ -88,7 +88,7 @@ class hyperType extends intType {
         return new Uint8Array(view.buffer)
     }
 
-    toJSON() { return this.value ? `${this.value}` : null }
+    toJSON() { return this.value ? `${this.value}n` : null }
 
 }
 
@@ -159,13 +159,11 @@ class opaqueType extends TypeDef {
 
     consume(bytes, mode, length, isValueInput) {
         if (isValueInput) return [this.constructor.serialize(bytes, this, mode, length), Array.from(bytes)]
-        let consumeLength
+        let consumeLength = Math.ceil(length / 4) * 4
         if (mode === 'variable') {
             const valueLength = this.constructor.getView(bytes, 0, 4).getUint32(0, false)
             if (length && (valueLength > length)) throw new Error(`Maximum variable value length exceeded for ${this.constructor.name}: ${bytes.length}`)
             consumeLength = 4 + Math.ceil(valueLength / 4) * 4
-        } else {
-            consumeLength = Math.ceil(length / 4) * 4
         }
         if (consumeLength > bytes.length) throw new Error(`Insufficient consumable byte length for ${mode} length ${this.constructor.name}: have ${bytes.length}, need ${consumeLength} bytes.`)
         return bytes.subarray(0, consumeLength)
@@ -329,16 +327,14 @@ const manifestToJson = manifest => {
 
 const BaseClass = class extends TypeDef {
 
+    static entry
+    static manifest = {}
     static name
     static namespace
-    static entry
-
-    static manifest = {}
 
     static serialize(value, instance, declaration) {
-        let type = declaration?.type ?? this.manifest.entry
+        let type = declaration?.type ?? this.manifest.entry, result
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
-        let result
         if (type in XDR.types) {
             result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
         } else if (type in this.manifest.typedefs) {
@@ -466,13 +462,12 @@ const BaseClass = class extends TypeDef {
             }
             result = { value, bytes: { byteLength } }
         } else if (type in this.manifest.unions) {
-            let byteLength = 0
-            const unionManifest = this.manifest.unions[type]
-            const enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
-            const enumValue = this.getView(bytes).getUint32(0, false)
+            let byteLength = 0, discriminantInstance
+            const unionManifest = this.manifest.unions[type],
+                enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type),
+                enumValue = this.getView(bytes).getUint32(0, false)
             bytes = bytes.subarray(4)
             byteLength += 4
-            let discriminantInstance
             try {
                 discriminantInstance = new enumClass(enumValue)
             } catch (e) {
@@ -525,7 +520,6 @@ const BaseClass = class extends TypeDef {
 }
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
-
 function parseX(xCode, className) {
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
@@ -535,13 +529,11 @@ function parseX(xCode, className) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
-
     for (const t of xCode.matchAll(rx.typedef)) {
         const typeObj = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
         typedefs[typeObj.identifier] = typeObj
         xCode = xCode.replace(t[0], '').replace(rx.blankLines, '').trim()
     }
-
     for (const m of xCode.matchAll(rx.enum)) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', enumName = isTypeDef ? m[4] : m[1],
             enumBody = isTypeDef ? m[3] : m[2], body = []
@@ -558,7 +550,6 @@ function parseX(xCode, className) {
         enums[enumName] = body
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
-
     const buildStructFromMatch = function (m) {
         const structName = m?.groups?.name ?? m?.groups?.nameTypeDef, structBody = m?.groups?.body ?? m?.groups?.bodyTypeDef, map = new Map()
         for (let declaration of structBody.split('\n')) {
@@ -604,7 +595,6 @@ function parseX(xCode, className) {
         }
         return [unionName, discriminant, arms]
     }
-
     let anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)),
         anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat)),
         anonymousStructCounter = 0, anonymousUnionCounter = 0
@@ -622,41 +612,34 @@ function parseX(xCode, className) {
         anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat))
         anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
     }
-
     for (const m of xCode.matchAll(rx.union)) {
         const [unionName, discriminant, arms] = buildUnionFromMatch(m)
         unions[unionName] = { discriminant, arms }
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
-
     for (const m of xCode.matchAll(rx.struct)) {
         const [structName, map] = buildStructFromMatch(m)
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
-
     let entry
     const dependedTypes = new Set()
     for (const name in unions) for (const a in unions[name].arms) dependedTypes.add(unions[name].arms[a].type)
     for (const name in structs) for (const p in structs[name]) dependedTypes.add(structs[name][p].type)
     for (const name of Object.keys(structs).concat(Object.keys(unions))) if (!dependedTypes.has(name)) { entry = name; break }
     if (!entry) throw new Error('no entry found')
-
     const typeClass = class extends BaseClass {
-        static name = className
-        static namespace = namespace
         static entry = entry
-
         static manifest = {
             ...BaseClass.manifest,
             name: this.name, namespace: this.namespace, entry: this.entry,
             constants, enums, typedefs, unions, structs,
         }
+        static name = className
+        static namespace = namespace
     }
     Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
-
     return typeClass
-
 }
 
 const XDR = {
@@ -724,10 +707,7 @@ const XDR = {
             if (!(type.prototype && (type.prototype instanceof TypeDef)) && type instanceof Object) {
                 const typeManifest = { ...type }
                 type = class extends BaseClass {
-                    static name = typeOptions.name ?? typeManifest.name
-                    static namespace = typeOptions.namespace ?? typeManifest.namespace
                     static entry = typeOptions.entry ?? typeManifest.entry
-
                     static manifest = {
                         ...BaseClass.manifest,
                         name: this.name, namespace: this.namespace, entry: this.entry,
@@ -737,6 +717,8 @@ const XDR = {
                         typedefs: typeManifest?.typedefs ?? {},
                         unions: typeManifest?.unions ?? {},
                     }
+                    static name = typeOptions.name ?? typeManifest.name
+                    static namespace = typeOptions.namespace ?? typeManifest.namespace
                 }
                 Object.defineProperty(type.manifest, 'toJSON', { value: function () { return manifestToJson(type.manifest) } })
             }
@@ -749,12 +731,10 @@ const XDR = {
         }
     },
     deserialize: function (bytes, typedef) {
-        typedef = resolveTypeDef(typedef)
-        return (new typedef(bytes)).value
+        return (new (resolveTypeDef(typedef))(bytes)).value
     },
     serialize: function (value, typedef) {
-        typedef = resolveTypeDef(typedef)
-        return (new typedef(value)).bytes
+        return (new (resolveTypeDef(typedef))(value)).bytes
     },
     parse: function (str, typedef) {
         const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
@@ -765,8 +745,7 @@ const XDR = {
         return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef)))
     },
     types: {
-        typedef: TypeDef, bool: boolType,
-        int: intType, hyper: hyperType, float: floatType, double: doubleType,
+        typedef: TypeDef, bool: boolType, int: intType, hyper: hyperType, float: floatType, double: doubleType,
         opaque: opaqueType, string: stringType, void: voidType
     },
     options: {
