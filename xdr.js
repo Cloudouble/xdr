@@ -145,7 +145,9 @@ class opaqueType extends TypeDef {
     constructor(input, mode, length) {
         if (mode !== 'variable') mode = 'fixed'
         length ??= input.length
-        super(input, mode, length, Array.isArray(input))
+        const inputIsArray = Array.isArray(input)
+        super(input, mode, length, inputIsArray)
+        if (mode === 'fixed' && inputIsArray && input.length !== length) throw new Error(`Fixed value length mismatch for ${this.constructor.name}: ${input.length}!= ${length}`)
         Object.defineProperties(this, {
             length: { value: length, enumerable: true },
             mode: { value: mode, enumerable: true }
@@ -209,6 +211,7 @@ class stringType extends TypeDef {
 class voidType extends TypeDef {
 
     static deserialize() { return null }
+    static isValueInput(input) { return input == null }
 
 }
 
