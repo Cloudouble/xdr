@@ -215,12 +215,6 @@ class voidType extends TypeDef {
 
 }
 
-function resolveTypeDef(typedef) {
-    if (typeof typedef === 'string') typedef = XDR.types[typedef]
-    if (!(typedef.prototype instanceof TypeDef)) throw new Error(`Invalid typedef: ${typedef}`)
-    return typedef
-}
-
 const rx = {
     'const': /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g,
     'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
@@ -580,6 +574,12 @@ function parseX(xCode, className) {
     }
     Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
     return typeClass
+}
+
+function resolveTypeDef(typedef) {
+    if (typeof typedef === 'string') typedef = XDR.types[typedef]
+    if (!(typedef.prototype instanceof TypeDef)) throw new Error(`Invalid typedef: ${typedef}`)
+    return typedef
 }
 
 const XDR = {
