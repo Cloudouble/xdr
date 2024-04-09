@@ -369,6 +369,10 @@ const BaseClass = class extends TypeDef {
 
     static deserialize(bytes, instance, declaration, raw, isArrayItem) {
         const type = declaration?.type ?? this.manifest.entry
+        const runDeserialize = (b, bl, d, iai) => {
+            const r = this.deserialize(b, undefined, d, true, iai)
+            return [bl + r.bytes.byteLength, r.value, b.subarray(r.bytes.byteLength)]
+        }
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         let result
         if (type in XDR.types) {
@@ -394,31 +398,22 @@ const BaseClass = class extends TypeDef {
                 if (declarationLength && !(declarationType in XDR.types)) {
                     const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
                     if (declarationMode === 'variable') {
+                        if (declarationVariableLength > declarationLength) throw new Error('variable length exceeds declaration length')
                         bytes = bytes.subarray(4)
                         byteLength += 4
-                        if (declarationVariableLength > declarationLength) throw new Error('variable length exceeds declaration length')
                     }
                     entryResult = new Array(declarationVariableLength)
-                    for (const i of entryResult.keys()) {
-                        const indexResult = this.deserialize(bytes, undefined, { ...identifierDeclaration, length: undefined, mode: undefined }, true, true)
-                        byteLength += indexResult.bytes.byteLength
-                        entryResult[i] = indexResult.value
-                        bytes = bytes.subarray(indexResult.bytes.byteLength)
-                    }
-                    value[identifier] = entryResult
+                    for (const i of entryResult.keys()) [byteLength, entryResult[i], bytes] = runDeserialize(bytes, byteLength, { ...identifierDeclaration, length: undefined, mode: undefined }, true)
+                    if (identifier) value[identifier] = entryResult
                 } else {
-                    entryResult = this.deserialize(bytes, undefined, identifierDeclaration, true)
-                    byteLength += entryResult.bytes.byteLength
-                    value[identifier] = entryResult.value
-                    bytes = bytes.subarray(entryResult.bytes.byteLength)
+                    [byteLength, value[identifier], bytes] = runDeserialize(bytes, byteLength, identifierDeclaration, true)
                 }
             }
             result = { value, bytes: { byteLength } }
         } else if (type in this.manifest.unions) {
             let byteLength = 0, discriminantInstance
-            const unionManifest = this.manifest.unions[type],
-                enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type),
-                enumValue = this.getView(bytes).getUint32(0, false)
+            const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type],
+                unionManifest.discriminant.type), enumValue = this.getView(bytes).getUint32(0, false)
             bytes = bytes.subarray(4)
             byteLength += 4
             try {
@@ -446,18 +441,12 @@ const BaseClass = class extends TypeDef {
                     if (armVariableLength > armLength) throw new Error('variable length exceeds arm declaration length')
                 }
                 armResult = new Array(armVariableLength)
-                for (const i of armResult.keys()) {
-                    const indexResult = this.deserialize(bytes, undefined, { ...armDeclaration, length: undefined, mode: undefined }, true, true)
-                    byteLength += indexResult.bytes.byteLength
-                    armResult[i] = indexResult.value
-                    bytes = bytes.subarray(indexResult.bytes.byteLength)
-                }
+                for (const i of armResult.keys()) [byteLength, armResult[i], bytes] = runDeserialize(bytes, byteLength, { ...armDeclaration, length: undefined, mode: undefined }, true)
                 if (identifier) value[identifier] = armResult
             } else {
-                armResult = this.deserialize(bytes, undefined, armDeclaration, true)
-                byteLength += armResult.bytes.byteLength
-                if (identifier) value[identifier] = armResult.value
-                bytes = bytes.subarray(armResult.bytes.byteLength)
+                let r
+                [byteLength, r, bytes] = runDeserialize(bytes, byteLength, armDeclaration, true)
+                if (identifier) value[identifier] = r
             }
             result = { value, bytes: { byteLength } }
         }
@@ -488,8 +477,7 @@ function parseX(xCode, className) {
         xCode = xCode.replace(t[0], '').replace(rx.blankLines, '').trim()
     }
     for (const m of xCode.matchAll(rx.enum)) {
-        const isTypeDef = m[0].slice(0, 8) === 'typedef ', enumName = isTypeDef ? m[4] : m[1],
-            enumBody = isTypeDef ? m[3] : m[2], body = []
+        const isTypeDef = m[0].slice(0, 8) === 'typedef ', enumName = isTypeDef ? m[4] : m[1], enumBody = isTypeDef ? m[3] : m[2], body = []
         for (const condition of enumBody.split(',')) {
             let [name, value] = condition.split('=').map(s => s.trim())
             if (!name || !value) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
@@ -525,20 +513,17 @@ function parseX(xCode, className) {
             let [discriminantValue, armDeclaration] = caseSpec.split(':').map(s => s.trim())
             if (!armDeclaration) { queuedArms.push(discriminantValue); continue }
             if (armDeclaration[armDeclaration.length - 1] === ';') armDeclaration = armDeclaration.slice(0, -1).trim()
+            const processArm = (c, cb) => {
+                const [name, map] = cb(mm)
+                c[name] = map
+                arms[discriminantValue] = { type: name }
+            }
             switch (armDeclaration.split(rx.space)[0]) {
                 case 'struct':
-                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.struct)) {
-                        const [structName, map] = buildStructFromMatch(mm)
-                        structs[structName] = map
-                        arms[discriminantValue] = { type: structName }
-                    }
+                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.struct)) processArm(structs, buildStructFromMatch)
                     break
                 case 'union':
-                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.union)) {
-                        const [unionName, map] = buildUnionFromMatch(mm)
-                        unions[unionName] = map
-                        arms[discriminantValue] = { type: unionName }
-                    }
+                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.union)) processArm(unions, buildUnionFromMatch)
                     break
                 default:
                     arms[discriminantValue] = parseTypeLengthModeIdentifier(armDeclaration, constants)
@@ -548,9 +533,8 @@ function parseX(xCode, className) {
         }
         return [unionName, discriminant, arms]
     }
-    let anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)),
-        anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat)),
-        anonymousStructCounter = 0, anonymousUnionCounter = 0
+    let anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)), anonymousStructCounter = 0,
+        anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat)), anonymousUnionCounter = 0
     while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
         for (const m of anonymousFlatStructMatches) {
             const [identifier, map] = buildStructFromMatch(m), structName = `anonymousStructType${++anonymousStructCounter}`
@@ -599,22 +583,16 @@ const XDR = {
     createEnum,
     factory: async function (str, options) {
         const namespace = options?.namespace, entry = options?.entry
-        let includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? document.baseURI
+        let includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? document.baseURI, isURL = !str.includes(';'), typeKey
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
-        let typeKey, isURL = !str.includes(';')
         if (options?.entry && (options?.name === true)) options.name = options.entry
-        if (isURL) {
-            str = new URL(str, document.baseURI).href
-            typeKey = options?.name ?? str
-        } else {
-            typeKey = options?.name ?? Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
-                x => (('00' + x.toString(16)).slice(-2))).join('')
-        }
+        if (isURL) str = new URL(str, document.baseURI).href
+        typeKey = options?.name ?? (isURL ? str : Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
+            x => (('00' + x.toString(16)).slice(-2))).join(''))
+        if (!namespace && (typeKey in this.types)) return this.types[typeKey]
         if (namespace) {
             this.types[namespace] ||= {}
             if (typeKey in this.types[namespace]) return this.types[namespace][typeKey]
-        } else if (typeKey in this.types) {
-            return this.types[typeKey]
         }
         if (isURL) {
             baseUri = options?.baseURI ?? (new URL(str, baseUri).href)
@@ -626,12 +604,8 @@ const XDR = {
             while (includesMatches.length) {
                 for (const includeMatch of includesMatches) {
                     const includeURL = includes(includeMatch[0], baseUri)
-                    if (urlsFetched[includeURL]) {
-                        str = str.replace(includeMatch[0], `\n\n`)
-                    } else {
-                        urlsFetched[includeURL] = true
-                        str = str.replace(includeMatch[0], `\n\n${await (await fetch(includeURL)).text()}\n\n`)
-                    }
+                    str = urlsFetched[includeURL] ? str.replace(includeMatch[0], `\n\n`) : str.replace(includeMatch[0], `\n\n${await (await fetch(includeURL)).text()}\n\n`)
+                    urlsFetched[includeURL] = true
                 }
                 includesMatches = Array.from(str.matchAll(rx.includes))
             }
@@ -662,13 +636,10 @@ const XDR = {
                 type = class extends BaseClass {
                     static entry = typeOptions.entry ?? typeManifest.entry
                     static manifest = {
-                        ...BaseClass.manifest,
-                        name: this.name, namespace: this.namespace, entry: this.entry,
-                        constants: typeManifest?.constants ?? {},
-                        enums: typeManifest?.enums ?? {},
+                        ...BaseClass.manifest, name: this.name, namespace: this.namespace, entry: this.entry,
+                        constants: typeManifest?.constants ?? {}, enums: typeManifest?.enums ?? {},
                         structs: Object.fromEntries(Object.entries(typeManifest?.structs ?? {}).map(([k, v]) => [k, new Map(v)])),
-                        typedefs: typeManifest?.typedefs ?? {},
-                        unions: typeManifest?.unions ?? {},
+                        typedefs: typeManifest?.typedefs ?? {}, unions: typeManifest?.unions ?? {},
                     }
                     static name = typeOptions.name ?? typeManifest.name
                     static namespace = typeOptions.namespace ?? typeManifest.namespace
@@ -683,20 +654,14 @@ const XDR = {
             }
         }
     },
-    deserialize: function (bytes, typedef) {
-        return (new (resolveTypeDef(typedef))(bytes)).value
-    },
-    serialize: function (value, typedef) {
-        return (new (resolveTypeDef(typedef))(value)).bytes
-    },
+    deserialize: function (bytes, typedef) { return (new (resolveTypeDef(typedef))(bytes)).value },
+    serialize: function (value, typedef) { return (new (resolveTypeDef(typedef))(value)).bytes },
     parse: function (str, typedef) {
         const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
         return this.deserialize(bytes, typedef)
     },
-    stringify: function (value, typedef) {
-        return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef)))
-    },
+    stringify: function (value, typedef) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef))) },
     types: {
         typedef: TypeDef, bool: boolType, int: intType, hyper: hyperType, float: floatType, double: doubleType,
         opaque: opaqueType, string: stringType, void: voidType
