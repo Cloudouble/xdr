@@ -4,7 +4,6 @@ class TypeDef {
     #value
 
     static namespace
-
     static additionalArgs = []
     static minBytesLength = 0
 
@@ -27,16 +26,18 @@ class TypeDef {
         } else {
             throw new Error(`Invalid input for ${this.constructor.name}: ${input}`)
         }
-        Object.defineProperty(this, 'bytes', { get: function () { return this.#bytes ??= this.constructor.serialize(this.#value, this) }, enumerable: true })
-        Object.defineProperty(this, 'value', { get: function () { return this.#value ??= this.constructor.deserialize(this.#bytes, this) }, enumerable: true })
+        Object.defineProperties(this, {
+            bytes: { get: function () { return this.#bytes ??= this.constructor.serialize(this.#value, this) }, enumerable: true },
+            value: { get: function () { return this.#value ??= this.constructor.deserialize(this.#bytes, this) }, enumerable: true }
+        })
     }
 
     consume(bytes) { return bytes.subarray(0, this.constructor.minBytesLength) }
 
-    toJSON() { return (this.value != undefined) ? this.value : null }
+    toJSON() { return this.value == undefined ? null : this.value }
     toString() {
         try {
-            return this.value ? JSON.stringify(this.value) : 'null'
+            return JSON.stringify(this.value ?? null)
         } catch (e) {
             throw new Error(`Error converting ${this.constructor.name} to string: ${e.message}`, { cause: e })
         }
@@ -55,14 +56,11 @@ class intType extends TypeDef {
     static additionalArgs = ['unsigned']
     static minBytesLength = 4
 
-    static deserialize(bytes) {
-        const view = this.getView(bytes)
-        return this.unsigned ? view.getUint32(0, false) : view.getInt32(0, false)
-    }
+    static deserialize(bytes) { return this.getView(bytes)[this.unsigned ? 'getUint32' : 'getInt32'](0, false) }
     static isValueInput(input) { return Number.isInteger(input) }
     static serialize(value) {
         const view = this.getView(4)
-        this.unsigned ? view.setUint32(0, value, false) : view.setInt32(0, value, false)
+        view[this.unsigned ? 'setUint32' : 'setInt32'](0, value, false)
         return new Uint8Array(view.buffer)
     }
 
@@ -77,10 +75,7 @@ class hyperType extends intType {
 
     static minBytesLength = 8
 
-    static deserialize(bytes) {
-        const view = this.getView(bytes)
-        return this.unsigned ? view.getBigUint64(0, false) : view.getBigInt64(0, false)
-    }
+    static deserialize(bytes) { return this.getView(bytes)[this.unsigned ? 'getBigUint64' : 'getBigInt64'](0, false) }
     static isValueInput(input) { return typeof input === 'bigint' }
     static serialize(value) {
         const view = this.getView(8)
@@ -88,7 +83,7 @@ class hyperType extends intType {
         return new Uint8Array(view.buffer)
     }
 
-    toJSON() { return this.value ? `${this.value}n` : null }
+    toJSON() { return this.value == undefined ? null : `${this.value}n` }
 
 }
 
@@ -137,7 +132,7 @@ class opaqueType extends TypeDef {
     static serialize(value, instance, mode, length) {
         mode ??= instance.mode
         length ??= instance.length
-        const bytesLength = Math.ceil((mode === 'fixed' ? length : (4 + value.length)) / 4) * 4, bytes = new Uint8Array(bytesLength)
+        const bytes = new Uint8Array(Math.ceil((mode === 'fixed' ? length : (4 + value.length)) / 4) * 4)
         if (mode === 'variable') {
             const view = this.getView(4)
             view.setUint32(0, value.length, false)
@@ -207,16 +202,13 @@ class stringType extends TypeDef {
 
     get maxLength() { return this.#maxLength }
 
-    toString() {
-        return this.value ?? ''
-    }
+    toString() { return this.value ?? '' }
 
 }
 
 class voidType extends TypeDef {
 
     static deserialize() { return null }
-    static isValueInput(input) { return input == null }
 
 }
 
@@ -239,25 +231,22 @@ const rx = {
 
 const parseTypeLengthModeIdentifier = function (declaration, constants) {
     let unsigned = declaration.slice(0, 9) === 'unsigned ' ? true : undefined,
-        [type, identifier] = declaration.replace(rx.unsigned, '').split(rx.space).map(part => part.trim()), length, mode, optional
-    if (identifier && identifier[0] === '*') {
-        identifier = identifier.slice(1)
-        optional = true
-    } else if (type && type.endsWith('*')) {
-        type = type.slice(0, -1)
-        optional = true
-    }
+        [type, identifier] = declaration.replace(rx.unsigned, '').split(rx.space).map(part => part.trim()), length, mode,
+        identifierHasStar = identifier && (identifier[0] === '*'), typeHasStar = type && type.endsWith('*'),
+        optional = identifierHasStar || typeHasStar
+    if (identifierHasStar) identifier = identifier.slice(1)
+    if (typeHasStar) type = type.slice(0, -1)
     if (type === 'void') return { type, length, mode, identifier, optional }
     const identifierIndexOfLt = identifier.indexOf('<'), identifierIndexOfGt = identifier.indexOf('>'),
         identifierIndexOfBracketStart = identifier.indexOf('['), identifierIndexOfBracketEnd = identifier.indexOf(']')
     if ((identifierIndexOfLt > 0) && (identifierIndexOfLt < identifierIndexOfGt)) {
         const lengthName = identifier.slice(identifierIndexOfLt + 1, identifierIndexOfGt)
-        length = parseInt(lengthName) || constants[lengthName] || undefined
+        length = parseInt(lengthName) || constants[lengthName]
         identifier = identifier.slice(0, identifierIndexOfLt)
         mode = 'variable'
     } else if ((identifierIndexOfBracketStart > 0) && (identifierIndexOfBracketStart < identifierIndexOfBracketEnd)) {
         const lengthName = identifier.slice(identifierIndexOfBracketStart + 1, identifierIndexOfBracketEnd)
-        length = parseInt(lengthName) || constants[lengthName] || undefined
+        length = parseInt(lengthName) || constants[lengthName]
         identifier = identifier.slice(0, identifierIndexOfBracketStart)
         mode = 'fixed'
     }
@@ -271,27 +260,21 @@ function createEnum(body, name) {
 
         static name = name
 
-        #body = body
+        #body
         #identifier
 
         constructor(input) {
             let originalInput = input
-            if (!body) {
-                input = parseInt(input) || 0
-            } else {
-                switch (typeof input) {
-                    case 'boolean': case 'string':
-                        input = body.indexOf(input)
-                }
+            switch (typeof input) {
+                case 'boolean': case 'string':
+                    input = body.indexOf(input)
+                default:
+                    if (!body) input = parseInt(input) || 0
             }
             super(input, true)
-            const value = this.value
-            if (!body) {
-                this.#identifier = input
-            } else {
-                if (this.#body[value] === undefined) throw new Error(`no enum identifier found for ${typeof originalInput} ${originalInput}`)
-                this.#identifier = this.#body[value]
-            }
+            this.#body = body
+            this.#identifier = this.#body ? this.#body[this.value] : input
+            if (this.#body && (this.#identifier === undefined)) throw new Error(`no enum identifier found for ${typeof originalInput} ${originalInput}`)
         }
 
         get identifier() { return this.#identifier }
@@ -306,15 +289,12 @@ const boolType = createEnum([false, true], 'boolType')
 const manifestToJson = manifest => {
     const retval = {}
     for (const manifestKey in manifest) {
-        if (manifest[manifestKey] == undefined) continue
         switch (typeof manifest[manifestKey]) {
-            case 'function': continue
+            case 'undefined': case 'function': continue
             case 'object':
                 if (manifestKey === 'structs') {
                     retval.structs = {}
-                    for (const structName in manifest.structs) {
-                        retval.structs[structName] = JSON.parse(JSON.stringify(Array.from(manifest.structs[structName].entries())))
-                    }
+                    for (const structName in manifest.structs) retval.structs[structName] = JSON.parse(JSON.stringify(Array.from(manifest.structs[structName].entries())))
                     continue
                 }
                 retval[manifestKey] = JSON.parse(JSON.stringify(manifest[manifestKey]))
@@ -335,23 +315,25 @@ const BaseClass = class extends TypeDef {
     static serialize(value, instance, declaration) {
         let type = declaration?.type ?? this.manifest.entry, result
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
+        const runSerialize = (v, cb) => {
+            let r
+            if (declaration.mode && declaration.length && Array.isArray(v)) {
+                let totalLength = 0
+                const chunks = [[new intType(v.length).bytes, totalLength]]
+                totalLength += 4
+                for (const item of v) totalLength += chunks[chunks.push([cb(item), totalLength]) - 1][0].length
+                r = new Uint8Array(totalLength)
+                for (const chunk of chunks) r.set(...chunk)
+                return r
+            } else {
+                return cb(v)
+            }
+        }
         if (type in XDR.types) {
             result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
         } else if (type in this.manifest.typedefs) {
-            if (Array.isArray(value) && declaration.mode && declaration.length) {
-                let totalLength = 0
-                const chunks = [[new intType(value.length).bytes, totalLength]]
-                totalLength += 4
-                for (const item of value) {
-                    const chunk = this.serialize(item, undefined, { ...declaration, mode: undefined, length: undefined })
-                    chunks.push([chunk, totalLength])
-                    totalLength += chunk.length
-                }
-                result = new Uint8Array(totalLength)
-                for (const chunk of chunks) result.set(...chunk)
-            } else {
-                result = this.serialize(value, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
-            }
+            const serializeTypedefItem = itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], mode: undefined, length: undefined })
+            result = runSerialize(value, serializeTypedefItem)
         } else if (type in this.manifest.structs) {
             const serializeStructItem = itemValue => {
                 const itemChunks = []
@@ -372,20 +354,7 @@ const BaseClass = class extends TypeDef {
                 for (const chunk of itemChunks) itemResult.set(...chunk)
                 return itemResult
             }
-            if (Array.isArray(value)) {
-                let totalLength = 0
-                const chunks = [[new intType(value.length).bytes, totalLength]]
-                totalLength += 4
-                for (const item of value) {
-                    const chunk = serializeStructItem(item)
-                    chunks.push([chunk, totalLength])
-                    totalLength += chunk.length
-                }
-                result = new Uint8Array(totalLength)
-                for (const chunk of chunks) result.set(...chunk)
-            } else {
-                result = serializeStructItem(value)
-            }
+            result = runSerialize(value, serializeStructItem)
         } else if (type in this.manifest.unions) {
             const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
             const serializeUnionItem = itemValue => {
@@ -396,20 +365,7 @@ const BaseClass = class extends TypeDef {
                 itemResult.set(armBytes, discriminantBytes.length)
                 return itemResult
             }
-            if (Array.isArray(value)) {
-                let totalLength = 0
-                const chunks = [[new intType(value.length).bytes, totalLength]]
-                totalLength += 4
-                for (const item of value) {
-                    const chunk = serializeUnionItem(item)
-                    chunks.push([chunk, totalLength])
-                    totalLength += chunk.length
-                }
-                result = new Uint8Array(totalLength)
-                for (const chunk of chunks) result.set(...chunk)
-            } else {
-                result = serializeUnionItem(value)
-            }
+            result = runSerialize(value, serializeUnionItem)
         }
         return result
     }
