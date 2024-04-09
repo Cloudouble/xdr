@@ -325,9 +325,8 @@ const BaseClass = class extends TypeDef {
                 r = new Uint8Array(totalLength)
                 for (const chunk of chunks) r.set(...chunk)
                 return r
-            } else {
-                return cb(v)
             }
+            return cb(v)
         }
         if (type in XDR.types) {
             result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
@@ -346,9 +345,7 @@ const BaseClass = class extends TypeDef {
                         if (!hasField) continue
                         identifierDeclaration = { ...identifierDeclaration, optional: undefined }
                     }
-                    const chunk = this.serialize(itemValue[identifier], undefined, identifierDeclaration)
-                    itemChunks.push([chunk, itemTotalLength])
-                    itemTotalLength += chunk.length
+                    itemTotalLength += itemChunks[itemChunks.push([this.serialize(itemValue[identifier], undefined, identifierDeclaration), itemTotalLength]) - 1][0].length
                 }
                 const itemResult = new Uint8Array(itemTotalLength)
                 for (const chunk of itemChunks) itemResult.set(...chunk)
@@ -359,8 +356,8 @@ const BaseClass = class extends TypeDef {
             const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
             const serializeUnionItem = itemValue => {
                 const enumIdentifier = itemValue[unionManifest.discriminant.value], discriminantBytes = (new enumClass(enumIdentifier)).bytes,
-                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier])
-                const itemResult = new Uint8Array(discriminantBytes.length + armBytes.length)
+                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier]),
+                    itemResult = new Uint8Array(discriminantBytes.length + armBytes.length)
                 itemResult.set(discriminantBytes, 0)
                 itemResult.set(armBytes, discriminantBytes.length)
                 return itemResult
