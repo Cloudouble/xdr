@@ -454,6 +454,30 @@ const BaseClass = class extends TypeDef {
         return bytes.subarray(0, testValue.bytes.byteLength)
     }
 
+    toJSON() {
+        const runToJson = v => {
+            switch (typeof v) {
+                case 'undefined':
+                    return null
+                case 'string': case 'number': case 'boolean':
+                    return v
+                case 'bigint':
+                    return `${v}n`
+                case 'object':
+                    if (!v) return null
+                    let r = {}
+                    if (v instanceof Array) {
+                        r = []
+                        for (const i of v) r.push(runToJson(i))
+                    } else {
+                        for (const [kk, vv] of (v instanceof Map ? v : Object.entries(v))) r[kk] = runToJson(vv)
+                    }
+                    return r
+            }
+        }
+        return runToJson(this.value)
+    }
+
 }
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
@@ -655,9 +679,12 @@ const XDR = {
             }
         }
     },
-    deserialize: function (bytes, typedef, arrayLength, arrayMode) {
+    deserialize: function (bytes, typedef, raw, arrayLength, arrayMode) {
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
-        if (!arrayLength) return (new (resolveTypeDef(typedef))(bytes)).value
+        if (!arrayLength) {
+            const r = (new (resolveTypeDef(typedef))(bytes))
+            return raw ? r : r.value
+        }
         if (arrayMode !== 'variable') arrayMode = 'fixed'
         const arrayActualLength = arrayMode === 'variable' ? TypeDef.getView(bytes).getUint32(0, false) : arrayLength
         if (arrayMode === 'variable') {
@@ -667,7 +694,7 @@ const XDR = {
         const result = new Array(arrayActualLength), typeDef = resolveTypeDef(typedef)
         for (const i of result.keys()) {
             const r = new typeDef(bytes)
-            result[i] = r.value
+            result[i] = raw ? r : r.value
             bytes = bytes.subarray(r.bytes.byteLength)
         }
         return result
@@ -690,12 +717,12 @@ const XDR = {
         for (const chunk of chunks) result.set(...chunk)
         return r
     },
-    parse: function (str, typedef) {
+    parse: function (str, typedef, raw, arrayLength, arrayMode) {
         const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
-        return this.deserialize(bytes, typedef)
+        return this.deserialize(bytes, typedef, raw, arrayLength, arrayMode)
     },
-    stringify: function (value, typedef) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef))) },
+    stringify: function (value, typedef, arrayLength, arrayMode) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, arrayLength, arrayMode))) },
     types: {
         typedef: TypeDef, bool: boolType, int: intType, hyper: hyperType, float: floatType, double: doubleType,
         opaque: opaqueType, string: stringType, void: voidType
