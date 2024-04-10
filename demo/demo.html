@@ -93,16 +93,10 @@
             ['transaction-envelope']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
                 entry: 'TransactionEnvelope', name: 'TransactionEnvelope'
             }),
-
-            temp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
-                entry: 'TransactionV1Envelope', name: true
-            }),
-
-
             types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
         }
 
-        window.stellar = stellar
+        // window.stellar = stellar
 
         const examples = {
             'file-value': JSON.stringify(fileValue, null, 4),
