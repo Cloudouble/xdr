@@ -102,19 +102,18 @@
             'file-value': JSON.stringify(fileValue, null, 4),
             'file-bytes': JSON.stringify(Array.from(fileBytes), null, 4),
             'file-type': await fetch('file.X').then(r => r.text()),
-
             'factory': `fileType = ${fileType.toString()}\n\n\n${XDR.types.typedef.toString()}`,
-            'new-from-bytes': `fileInstanceFromBytes = ${JSON.stringify({ ...fileInstanceFromBytes, constructor: { ...fileInstanceFromBytes.constructor } }, null, 4)}`,
-            'new-from-value': `fileInstanceFromValue = ${JSON.stringify({ ...fileInstanceFromValue, constructor: { ...fileInstanceFromValue.constructor } }, null, 4)}`,
-
+            'new-from-bytes': `fileInstanceFromBytes = ${JSON.stringify({
+                ...{ value: fileInstanceFromBytes.value, bytes: Array.from(fileInstanceFromBytes.bytes) }, constructor: { ...fileInstanceFromBytes.constructor }
+            }, null, 4)}`,
+            'new-from-value': `fileInstanceFromValue = ${JSON.stringify({
+                ...{ value: fileInstanceFromValue.value, bytes: Array.from(fileInstanceFromValue.bytes) }, constructor: { ...fileInstanceFromValue.constructor }
+            }, null, 4)}`,
             'deserialize': JSON.stringify(XDR.deserialize(fileBytes, fileType), null, 4),
             'serialize': JSON.stringify(Array.from(XDR.serialize(fileValue, fileType)), null, 4),
-
             'stringify': JSON.stringify(XDR.stringify(fileValue, fileType), null, 4),
             'parse': JSON.stringify(XDR.parse(base64Str, fileType), null, 4),
-
             ...Object.fromEntries(Object.entries(stellar).map(ent => ([`stellar-${ent[0]}`, JSON.stringify(ent[1].manifest, null, 4)])))
-
         }
         for (const [id, textContent] of Object.entries(examples)) (document.getElementById(id)?.querySelector('pre') || {}).textContent = textContent
 
