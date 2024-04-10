@@ -143,6 +143,7 @@ class opaqueType extends TypeDef {
     }
 
     constructor(input, length, mode) {
+        console.log('line 146', input, length, mode)
         length ??= input.length
         if (mode !== 'variable') mode = 'fixed'
         const inputIsArray = Array.isArray(input)
