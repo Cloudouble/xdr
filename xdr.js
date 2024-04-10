@@ -116,7 +116,7 @@ class doubleType extends floatType {
 
 class opaqueType extends TypeDef {
 
-    static additionalArgs = ['mode', 'length']
+    static additionalArgs = ['length', 'mode']
 
     static deserialize(bytes, instance) {
         switch (instance.mode) {
@@ -129,7 +129,7 @@ class opaqueType extends TypeDef {
         }
     }
     static isValueInput(input) { return Array.isArray(input) }
-    static serialize(value, instance, mode, length) {
+    static serialize(value, instance, length, mode) {
         mode ??= instance.mode
         length ??= instance.length
         const bytes = new Uint8Array(Math.ceil((mode === 'fixed' ? length : (4 + value.length)) / 4) * 4)
@@ -142,11 +142,11 @@ class opaqueType extends TypeDef {
         return bytes
     }
 
-    constructor(input, mode, length) {
-        if (mode !== 'variable') mode = 'fixed'
+    constructor(input, length, mode) {
         length ??= input.length
+        if (mode !== 'variable') mode = 'fixed'
         const inputIsArray = Array.isArray(input)
-        super(input, mode, length, inputIsArray)
+        super(input, length, mode, inputIsArray)
         if (mode === 'fixed' && inputIsArray && input.length !== length) throw new Error(`Fixed value length mismatch for ${this.constructor.name}: ${input.length}!= ${length}`)
         Object.defineProperties(this, {
             length: { value: length, enumerable: true },
@@ -154,7 +154,7 @@ class opaqueType extends TypeDef {
         })
     }
 
-    consume(bytes, mode, length, isValueInput) {
+    consume(bytes, length, mode, isValueInput) {
         if (isValueInput) return [this.constructor.serialize(bytes, this, mode, length), Array.from(bytes)]
         let consumeLength = Math.ceil(length / 4) * 4
         if (mode === 'variable') {
