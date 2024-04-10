@@ -380,12 +380,6 @@ const BaseClass = class extends TypeDef {
             const value = {}
             let byteLength = 0, entryResult
             for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-                // console.log('line 383', identifier, identifierDeclaration, bytes)
-                // if (isArrayItem) {
-                //     identifierDeclaration = { ...identifierDeclaration }
-                //     delete identifierDeclaration.length
-                //     delete identifierDeclaration.mode
-                // }
                 const { length: declarationLength, mode: declarationMode, type: declarationType, optional: declarationOptional } = identifierDeclaration
                 if (declarationOptional) {
                     const hasField = !!this.getView(bytes).getUint32(0, false)
@@ -393,7 +387,6 @@ const BaseClass = class extends TypeDef {
                     byteLength += 4
                     if (!hasField) continue
                 }
-                // if (identifier === 'operations') console.log('line 396', identifierDeclaration)
                 if (declarationLength && (!XDR.types[declarationType] || (XDR.types[declarationType] && !(XDR.types[declarationType].prototype instanceof TypeDef)))) {
                     const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
                     if (declarationMode === 'variable') {
