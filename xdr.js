@@ -687,9 +687,10 @@ const XDR = {
             }
         }
     },
-    deserialize: function (bytes, typedef, arrayLength, arrayMode, raw) {
+    deserialize: function (bytes, typedef, arrayLength, arrayMode, raw, test) {
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
         const typeDef = resolveTypeDef(typedef)
+        // if (test) console.log('line 693', bytes, typeDef.name, typeDef.isImplicitArray, arrayLength, arrayMode, raw, test)
         if (!arrayLength || typeDef.isImplicitArray) {
             const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))
             return raw ? r : r.value

@@ -130,8 +130,8 @@
         console.log(entry, 'instance4: ', instance4)
         console.log('%s %s %c%s', entry, 'instances 1 & 4 same bytes: ', 'color: green;', show(instance1.bytes) === show(instance4.bytes))
 
-        const value5 = XDR.deserialize(bytes, Array.isArray(entry) ? XDR.types[entry[0]] : XDR.types.stellar[entry], ...entry.slice(1), null, 'test')
-        const bytes5 = XDR.serialize(value5, Array.isArray(entry) ? XDR.types[entry[0]] : XDR.types.stellar[entry], ...entry.slice(1), 'test')
+        const value5 = XDR.deserialize(bytes, Array.isArray(entry) ? XDR.types[entry[0]] : XDR.types.stellar[entry], ...(Array.isArray(entry) ? entry.slice(1) : [null, null]), null, 'test')
+        const bytes5 = XDR.serialize(value5, Array.isArray(entry) ? XDR.types[entry[0]] : XDR.types.stellar[entry], ...(Array.isArray(entry) ? entry.slice(1) : [null, null]), 'test')
 
         console.log(entry, 'value5: ', value5)
         console.log(entry, 'bytes5: ', bytes5)
