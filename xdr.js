@@ -159,7 +159,7 @@ class opaqueType extends TypeDef {
         let consumeLength = Math.ceil(length / 4) * 4
         if (mode === 'variable') {
             const valueLength = this.constructor.getView(bytes, 0, 4).getUint32(0, false)
-            if (length && (valueLength > length)) throw new Error(`Maximum variable value length exceeded for ${this.constructor.name}: ${bytes.length}`)
+            if (length && (valueLength > length)) throw new Error(`Maximum variable value length exceeded for ${this.constructor.name}: ${valueLength} > ${bytes.length}`)
             consumeLength = 4 + Math.ceil(valueLength / 4) * 4
         }
         if (consumeLength > bytes.length) throw new Error(`Insufficient consumable byte length for ${mode} length ${this.constructor.name}: have ${bytes.length}, need ${consumeLength} bytes.`)
@@ -331,8 +331,13 @@ const BaseClass = class extends TypeDef {
         if (type in XDR.types) {
             result = (new XDR.types[type](value, ...XDR.types[type].additionalArgs.map(a => declaration[a]))).bytes
         } else if (type in this.manifest.typedefs) {
-            const serializeTypedefItem = itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], mode: undefined, length: undefined })
-            result = runSerialize(value, serializeTypedefItem)
+            switch (this.manifest.typedefs[type].type) {
+                case 'opaque':
+                    result = this.serialize(value, undefined, { ...this.manifest.typedefs[type] })
+                    break
+                default:
+                    result = runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], mode: undefined, length: undefined }))
+            }
         } else if (type in this.manifest.structs) {
             const serializeStructItem = itemValue => {
                 const itemChunks = []
