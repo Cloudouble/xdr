@@ -744,5 +744,3 @@ const XDR = {
 }
 
 export default XDR
-
-
