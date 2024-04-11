@@ -37,13 +37,7 @@ class TypeDef {
     consume(bytes) { return bytes.subarray(0, this.constructor.minBytesLength) }
 
     toJSON() { return this.value == undefined ? null : this.value }
-    toString() {
-        try {
-            return JSON.stringify(this.value ?? null)
-        } catch (e) {
-            throw new Error(`Error converting ${this.constructor.name} to string: ${e.message}`, { cause: e })
-        }
-    }
+    toString() { return btoa(String.fromCharCode.apply(null, this.bytes)) }
     valueOf() { return this.value }
 
     #consume(bytes, ...consumeArgs) {
@@ -207,8 +201,6 @@ class stringType extends TypeDef {
 
     get maxLength() { return this.#maxLength }
 
-    toString() { return this.value ?? '' }
-
 }
 
 class voidType extends TypeDef {
@@ -285,8 +277,8 @@ function createEnum(body, name) {
 
 const boolType = createEnum([false, true], 'boolType')
 Object.defineProperties(boolType.prototype, {
-    toJSON: { value: function () { return !!this.value } },
-    toString: { value: function () { return this.value ? 'true' : 'false' } }
+    valueOf: { value: function () { return !!this.value } },
+    toJSON: { value: function () { return !!this.value } }
 })
 
 const manifestToJson = manifest => {
