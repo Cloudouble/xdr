@@ -684,7 +684,7 @@ const XDR = {
             }
         }
     },
-    deserialize: function (bytes, typedef, raw, arrayLength, arrayMode) {
+    deserialize: function (bytes, typedef, arrayLength, arrayMode, raw) {
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
         if (!arrayLength) {
             const r = (new (resolveTypeDef(typedef))(bytes))
@@ -717,15 +717,15 @@ const XDR = {
             chunks.push([new intType(arrayActualLength).bytes, totalLength])
             totalLength += 4
         }
-        for (const item of v) totalLength += chunks[chunks.push([this.serialize(item, typeDef), totalLength]) - 1][0].length
+        for (const item of value) totalLength += chunks[chunks.push([this.serialize(item, typeDef), totalLength]) - 1][0].length
         let result = new Uint8Array(totalLength)
         for (const chunk of chunks) result.set(...chunk)
-        return r
+        return result
     },
-    parse: function (str, typedef, raw, arrayLength, arrayMode) {
+    parse: function (str, typedef, arrayLength, arrayMode, raw) {
         const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
-        return this.deserialize(bytes, typedef, raw, arrayLength, arrayMode)
+        return this.deserialize(bytes, typedef, arrayLength, arrayMode, raw)
     },
     stringify: function (value, typedef, arrayLength, arrayMode) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, arrayLength, arrayMode))) },
     types: {
