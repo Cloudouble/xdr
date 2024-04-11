@@ -3,9 +3,11 @@ class TypeDef {
     #bytes
     #value
 
-    static namespace
+
     static additionalArgs = []
+    static isImplicitArray = false
     static minBytesLength = 0
+    static namespace
 
     static deserialize(bytes) { return }
     static getView(i, byteOffset, byteLength) {
@@ -117,6 +119,7 @@ class doubleType extends floatType {
 class opaqueType extends TypeDef {
 
     static additionalArgs = ['length', 'mode']
+    static isImplicitArray = true
 
     static deserialize(bytes, instance) {
         switch (instance.mode) {
@@ -686,17 +689,18 @@ const XDR = {
     },
     deserialize: function (bytes, typedef, arrayLength, arrayMode, raw) {
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
-        if (!arrayLength) {
-            const r = (new (resolveTypeDef(typedef))(bytes))
+        const typeDef = resolveTypeDef(typedef)
+        if (!arrayLength || typeDef.isImplicitArray) {
+            const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))
             return raw ? r : r.value
         }
         if (arrayMode !== 'variable') arrayMode = 'fixed'
-        const arrayActualLength = arrayMode === 'variable' ? TypeDef.getView(bytes).getUint32(0, false) : arrayLength
+        const arrayActualLength = arrayMode === 'variable' ? typeDef.getView(bytes).getUint32(0, false) : arrayLength
         if (arrayMode === 'variable') {
             if (arrayActualLength > arrayLength) throw new Error('variable length array exceeds max array length')
             bytes = bytes.subarray(4)
         }
-        const result = new Array(arrayActualLength), typeDef = resolveTypeDef(typedef)
+        const result = new Array(arrayActualLength)
         for (const i of result.keys()) {
             const r = new typeDef(bytes)
             result[i] = raw ? r : r.value
@@ -704,9 +708,9 @@ const XDR = {
         }
         return result
     },
-    serialize: function (value, typedef, arrayLength, arrayMode) {
+    serialize: function (value, typedef, arrayLength, arrayMode, test) {
         const typeDef = resolveTypeDef(typedef)
-        if (!arrayLength) return (new typeDef(value)).bytes
+        if (!arrayLength || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))).bytes
         if (!Array.isArray(value)) throw new Error('value must be an array')
         if (arrayMode !== 'variable') arrayMode = 'fixed'
         const arrayActualLength = arrayMode === 'variable' ? value.length : arrayLength
