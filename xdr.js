@@ -3,7 +3,6 @@ class TypeDef {
     #bytes
     #value
 
-
     static additionalArgs = []
     static isImplicitArray = false
     static minBytesLength = 0
