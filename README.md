@@ -87,16 +87,12 @@ Stringify a given live JavaScript value into a base64 encoded byte string of XDR
 
 ### ```XDR.types```
 
-Something
+This object holds all currently loaded types as classes. They can be loaded one at a time from .X string or file URLS via the `XDR.factory()` method, or all at once using the `XDR.load()` method. The could also be manually constructed using the `XDR.types.TypeDef` class as the base class and then directly added as values to any arbitary keys in this object. If a class has a namespace property defined, it will be found within a similarly-named sub-object of the `types` object.
+
 
 ### ```XDR.options```
 
-Something
-
-
-
-
-
+Can be used to defined default options for the `XDR.factory()` method. By default, it includes a default `includes` method. This can be overriden or other options as described above can have default value defined here as required.
 
 ## Usage
 
