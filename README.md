@@ -2,6 +2,99 @@
 
 A library for encoding and decoding XDR data within the browser or browser-like environments.
 
+The .X syntax used as the standard has been taken from https://datatracker.ietf.org/doc/html/rfc4506.html
+
+[Stellar](https://stellar.org/) specific features and syntax has been completed using the code from https://github.com/stellar/stellar-xdr/tree/curr as a guide and example.
+
+## Install
+
+```import XDR from "xdr.js"```
+
+## API
+
+### ```XDR.createEnum(body, name)```
+
+Creates a new Enum class with the given body constants and name. The body arms is an array of strings which each correspond to the named constants within the enumeration, and their index within the array corresponds to the value of the constant. For example: 
+
+The following enumeration with the name "colors" has 3 constants, RED, YELLOW, and BLUE, and their values are 2, 3, and 5 respectively: 
+```enum { RED = 2, YELLOW = 3, BLUE = 5 } colors;```
+
+Create a class to excapsulate this enumeration as follows: 
+
+```const colorsEnumType = XDR.createEnum([,,'RED','YELLOW',,'BLUE'], 'colors')```
+
+The built-in boolType class is created as follows: ```const boolType = createEnum([false, true], 'boolType')```
+
+
+### ```XDR.factory(str, options)```
+
+Creates, registers and returns a new type class from the given .X type definition. The type definition `str` can be a direct string of .X code, or it can be a URL to a .X file. The `options` object can contain the following properties, all of which are optional:
+
+* **baseURI**: An absolute URL which will be used as the base for resolving included URLs within the .X file.
+* **name**: the name for the returned class type
+* **namespace**: a namespace to place the created class type within, will place the class as a value with a like-named sub-object within the `XDR.types` object, instead of directly within the `XDR.types` object
+* **entry**: the name of a struct of union definition contained within the .X file, while a single file can define many types, only one can be returned as the result of a factory call, this option allows the caller to specify which type to return. If omitted, it will use the first found type that is not depended on by any other types in the file. 
+* **includes**: a function which can customize how includes statements within .X files are handled. The includes function is passed the string match and the baseURI and should return an absolute URL from which to fetch the included file. The built-in function is designed to handle the includes syntax as used by the Stellar type definitions. 
+
+
+### ```XDR.export(namespace)```
+
+Returns an object with keys being type names and values being type manifest objects that can be used to reconstruct types using the `XDR.load()` function. The optional `namespace` parameter will only return types that are within the given namespace, otherwise it will only return types that do not have any namespace.
+
+The returned value can be saved as a .json file and used to more efficiently load types in the future instead of parsing from .X files.
+
+
+### ```XDR.load(types = {}, options = {}, defaultOptions = {})```
+
+Takes an object previously returned from a `XDR.export()` call and loads the given types directly into the XDR object for use. This bypasses the need to fetch and parse .X file and thus allows for far more efficient production loading of types. Many types can be loaded in one call, and no .X parsing is done with this function. 
+
+The optional `options` object can contain the same keys as the types object, and each value is an options object used when loading that given type - with the same options available as the `options` argument to the `XDR.factory()`  function above.
+
+The optional `defaultOptions` object can be used to create a template `options` object which will be used as the default options for all type loaded. The options in this object will be overridden on a per-option basis by the options in the `options` object.
+
+
+### ```XDR.deserialize(bytes, typedef, arrayLength, arrayMode='fixed', raw=false)```
+
+Deserialize a given byte array (as a `Uint8Array` instance) into a return JavaScript value, using the given the type definition class `typedef` as the type. 
+
+The deserialize the bytes as an array of instance of the given type, the optional `arrayLength` and `arrayMode` arguments are used. Specify the maximum length of the array if `arrayMode` is 'fixed', or the maximum allowable length of the array if `arrayMode` is 'variable'. If omitted, the deserialization is done assuming the given bytes describe a single instance of the type. The the native types `XDR.types.opaque` and `XDR.types.string`, these two arguments described the mode and length of the byte array or string.
+
+For example: 
+
+* Deserialize `bytes` as a variable length string with a maximum length of 15 characters: ```const myString = XDR.deserialize(bytes, XDR.types.string, 15, 'variable')```, this would somewhat correspond to the .X syntax ```string myString<15>```. 
+* A fixed length opaque type with a length of 16 bytes: ```const myOpaque = XDR.deserialize(bytes, XDR.types.opaque, 16, 'fixed')```, this would somewhat correspond to the .X syntax ```opaque[16] myOpaque```.
+* an array of `myType` instances with a fixed length of 10: ```const myArray = XDR.deserialize(bytes, XDR.types.myType, 10, 'fixed')```, this would somewhat correspond to the .X syntax ```myType myArray[10]```.
+* an array of `myType` instances with a maximum length of 10: ```const myArray = XDR.deserialize(bytes, XDR.types.myType, 10, 'variable')```, this would somewhat correspond to the .X syntax ```myType myArray<10>```.
+
+
+
+
+
+### ```XDR.serialize()```
+
+Something
+
+### ```XDR.parse()```
+
+Something
+
+### ```XDR.stringify()```
+
+Something
+
+### ```XDR.types```
+
+Something
+
+### ```XDR.options```
+
+Something
+
+
+
+
+
+
 ## Usage
 
     <script type="module">
