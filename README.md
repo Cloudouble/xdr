@@ -55,9 +55,9 @@ The optional `defaultOptions` object can be used to create a template `options` 
 
 ### ```XDR.deserialize(bytes, typedef, arrayLength, arrayMode='fixed', raw=false)```
 
-Deserialize a given byte array (as a `Uint8Array` instance) into a return JavaScript value, using the given the type definition class `typedef` as the type. 
+Deserialize a given byte array (as a `Uint8Array` instance) into a return JavaScript value, using the given the type definition class `typeDef` as the type. 
 
-The deserialize the bytes as an array of instance of the given type, the optional `arrayLength` and `arrayMode` arguments are used. Specify the maximum length of the array if `arrayMode` is 'fixed', or the maximum allowable length of the array if `arrayMode` is 'variable'. If omitted, the deserialization is done assuming the given bytes describe a single instance of the type. The the native types `XDR.types.opaque` and `XDR.types.string`, these two arguments described the mode and length of the byte array or string.
+The deserialize the bytes as an array of instance of the given type, the optional `arrayLength` and `arrayMode` arguments are used. Specify the maximum length of the array if `arrayMode` is 'fixed', or the maximum allowable length of the array if `arrayMode` is 'variable'. If omitted, the deserialization is done assuming the given bytes describe a single instance of the type. The native types `XDR.types.opaque` and `XDR.types.string`, these two arguments describe the mode and length of the byte array or string.
 
 For example: 
 
@@ -66,22 +66,24 @@ For example:
 * an array of `myType` instances with a fixed length of 10: ```const myArray = XDR.deserialize(bytes, XDR.types.myType, 10, 'fixed')```, this would somewhat correspond to the .X syntax ```myType myArray[10]```.
 * an array of `myType` instances with a maximum length of 10: ```const myArray = XDR.deserialize(bytes, XDR.types.myType, 10, 'variable')```, this would somewhat correspond to the .X syntax ```myType myArray<10>```.
 
-The final `raw` argument is set to `true` to return the instances of `typedef` rather than 
+The final `raw` argument is set to `true` to return the instances of `typeDef` rather than the values of the instances. This is useful for when you want to use the instances of `typedef` as the basis for further serialization.
 
 
-### ```XDR.serialize()```
+### ```XDR.serialize(value, typeDef, arrayLength, arrayMode='fixed')```
 
+Serialize a given JavaScript value into a byte array, using the given the type definition class `typeDef` as the type. If the value is an array, it will be serialized as an array of instances of the given type, with the optional `arrayLength` and `arrayMode` arguments being used. Specify the maximum length of the array if `arrayMode` is 'fixed', or the maximum allowable length of the array if `arrayMode` is 'variable'. If omitted, the serialization is done assuming the given value describes a single instance of the type. For the native types `XDR.types.opaque` and `XDR.types.string`, these two arguments describe the mode and length of the byte array or string.
 
+Serialization as an array is assumed if the value is an array, and with the typeDef NOT being `XDR.types.opaque`. If the value is an array but `arrayLength` is omitted, the length of the given array `value` is used.
 
-Something
+### ```XDR.parse(str, typedef, arrayLength, arrayMode, raw)```
 
-### ```XDR.parse()```
+Parse a given base64 encoded byte string into a live JavaScript value. The arguments and output are the same as `XDR.deserialize()`, except instead for a `Uint8Array` of bytes, it takes a base64 encoded string of bytes. 
 
-Something
 
 ### ```XDR.stringify()```
 
-Something
+Stringify a given live JavaScript value into a base64 encoded byte string of XDR formatted bytes. The arguments and output are the same as `XDR.serialize()`, except instead for a `Uint8Array` of bytes, it returns a base64 encoded string of bytes.
+
 
 ### ```XDR.types```
 
