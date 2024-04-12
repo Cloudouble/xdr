@@ -12,20 +12,6 @@ The .X syntax used as the standard has been taken from https://datatracker.ietf.
 
 ## API
 
-### ```XDR.createEnum(body, name)```
-
-Creates a new Enum class with the given body constants and name. The body arms is an array of strings which each correspond to the named constants within the enumeration, and their index within the array corresponds to the value of the constant. For example: 
-
-The following enumeration with the name "colors" has 3 constants, RED, YELLOW, and BLUE, and their values are 2, 3, and 5 respectively: 
-```enum { RED = 2, YELLOW = 3, BLUE = 5 } colors;```
-
-Create a class to excapsulate this enumeration as follows: 
-
-```const colorsEnumType = XDR.createEnum([,,'RED','YELLOW',,'BLUE'], 'colors')```
-
-The built-in boolType class is created as follows: ```const boolType = createEnum([false, true], 'boolType')```
-
-
 ### ```XDR.factory(str, options)```
 
 Creates, registers and returns a new type class from the given .X type definition. The type definition `str` can be a direct string of .X code, or it can be a URL to a .X file. The `options` object can contain the following properties, all of which are optional:
@@ -53,6 +39,20 @@ The optional `options` object can contain the same keys as the types object, and
 The optional `defaultOptions` object can be used to create a template `options` object which will be used as the default options for all type loaded. The options in this object will be overridden on a per-option basis by the options in the `options` object.
 
 
+### ```XDR.createEnum(body, name)```
+
+Creates a new Enum class with the given body constants and name. The body arms is an array of strings which each correspond to the named constants within the enumeration, and their index within the array corresponds to the value of the constant. For example: 
+
+The following enumeration with the name "colors" has 3 constants, RED, YELLOW, and BLUE, and their values are 2, 3, and 5 respectively: 
+```enum { RED = 2, YELLOW = 3, BLUE = 5 } colors;```
+
+Create a class to excapsulate this enumeration as follows: 
+
+```const colorsEnumType = XDR.createEnum([,,'RED','YELLOW',,'BLUE'], 'colors')```
+
+The built-in boolType class is created as follows: ```const boolType = createEnum([false, true], 'boolType')```
+
+
 ### ```XDR.deserialize(bytes, typedef, arrayLength, arrayMode='fixed', raw=false)```
 
 Deserialize a given byte array (as a `Uint8Array` instance) into a return JavaScript value, using the given the type definition class `typeDef` as the type. 
@@ -75,6 +75,7 @@ Serialize a given JavaScript value into a byte array, using the given the type d
 
 Serialization as an array is assumed if the value is an array, and with the typeDef NOT being `XDR.types.opaque`. If the value is an array but `arrayLength` is omitted, the length of the given array `value` is used.
 
+
 ### ```XDR.parse(str, typedef, arrayLength, arrayMode, raw)```
 
 Parse a given base64 encoded byte string into a live JavaScript value. The arguments and output are the same as `XDR.deserialize()`, except instead for a `Uint8Array` of bytes, it takes a base64 encoded string of bytes. 
@@ -93,6 +94,8 @@ This object holds all currently loaded types as classes. They can be loaded one 
 ### ```XDR.options```
 
 Can be used to defined default options for the `XDR.factory()` method. By default, it includes a default `includes` method. This can be overriden or other options as described above can have default value defined here as required.
+
+
 
 ## Usage
 
