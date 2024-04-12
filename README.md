@@ -52,7 +52,7 @@ The .X syntax used as the standard has been taken from https://datatracker.ietf.
 
             fileType = await XDR.factory('demo/file.X'),
 
-            // create an instance of the type from either a Uint8Array of regular Array of byte integers 
+            // create an instance of the type from a Uint8Array of byte integers 
             fileInstanceFromBytes = new fileType(fileBytes),
 
             // create an instance of the type from a live object that conforms to the type definition
