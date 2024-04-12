@@ -597,12 +597,6 @@ function parseX(xCode, className) {
     return typeClass
 }
 
-function resolveTypeDef(typedef) {
-    if (typeof typedef === 'string') typedef = XDR.types[typedef]
-    if (!(typedef.prototype instanceof TypeDef)) throw new Error(`Invalid typedef: ${typedef}`)
-    return typedef
-}
-
 const XDR = {
     createEnum,
     factory: async function (str, options) {
@@ -678,9 +672,9 @@ const XDR = {
             }
         }
     },
-    deserialize: function (bytes, typedef, arrayLength, arrayMode, raw) {
+    deserialize: function (bytes, typeDef, arrayLength, arrayMode, raw) {
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
-        const typeDef = resolveTypeDef(typedef)
+        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef}`)
         if (!arrayLength || typeDef.isImplicitArray) {
             const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))
             return raw ? r : r.value
@@ -699,8 +693,8 @@ const XDR = {
         }
         return result
     },
-    serialize: function (value, typedef, arrayLength, arrayMode) {
-        const typeDef = resolveTypeDef(typedef)
+    serialize: function (value, typeDef, arrayLength, arrayMode) {
+        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef}`)
         if (!arrayLength || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))).bytes
         if (!Array.isArray(value)) throw new Error('value must be an array')
         if (arrayMode !== 'variable') arrayMode = 'fixed'

@@ -66,11 +66,12 @@ For example:
 * an array of `myType` instances with a fixed length of 10: ```const myArray = XDR.deserialize(bytes, XDR.types.myType, 10, 'fixed')```, this would somewhat correspond to the .X syntax ```myType myArray[10]```.
 * an array of `myType` instances with a maximum length of 10: ```const myArray = XDR.deserialize(bytes, XDR.types.myType, 10, 'variable')```, this would somewhat correspond to the .X syntax ```myType myArray<10>```.
 
-
-
+The final `raw` argument is set to `true` to return the instances of `typedef` rather than 
 
 
 ### ```XDR.serialize()```
+
+
 
 Something
 
