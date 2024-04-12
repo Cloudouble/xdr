@@ -598,6 +598,7 @@ function parseX(xCode, className) {
 }
 
 const XDR = {
+    version: '1.0.0',
     createEnum,
     factory: async function (str, options) {
         const namespace = options?.namespace, entry = options?.entry

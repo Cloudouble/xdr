@@ -1,6 +1,6 @@
 # simple-xdr
 
-A library for encoding and decoding XDR data within the browser or browser-like environments.
+A simple, fast and light-weight library for encoding and decoding XDR data within the browser or browser-like environments.
 
 The .X syntax used as the standard has been taken from https://datatracker.ietf.org/doc/html/rfc4506.html
 
