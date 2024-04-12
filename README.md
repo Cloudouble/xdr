@@ -126,7 +126,7 @@ Create a class to excapsulate this enumeration as follows:
 The built-in boolType class is created as follows: ```const boolType = createEnum([false, true], 'boolType')```
 
 
-### ```XDR.deserialize(bytes, typedef, arrayLength, arrayMode='fixed', raw=false)```
+### ```XDR.deserialize(bytes, typeDef, arrayLength, arrayMode='fixed', raw=false)```
 
 Deserialize a given byte array (as a `Uint8Array` instance) into a return JavaScript value, using the given the type definition class `typeDef` as the type. 
 
@@ -149,12 +149,12 @@ Serialize a given JavaScript value into a byte array, using the given the type d
 Serialization as an array is assumed if the value is an array, and with the typeDef NOT being `XDR.types.opaque`. If the value is an array but `arrayLength` is omitted, the length of the given array `value` is used.
 
 
-### ```XDR.parse(str, typedef, arrayLength, arrayMode, raw)```
+### ```XDR.parse(str, typeDef, arrayLength, arrayMode, raw)```
 
 Parse a given base64 encoded byte string into a live JavaScript value. The arguments and output are the same as `XDR.deserialize()`, except instead for a `Uint8Array` of bytes, it takes a base64 encoded string of bytes. 
 
 
-### ```XDR.stringify()```
+### ```XDR.stringify(value, typeDef, arrayLength, arrayMode='fixed')```
 
 Stringify a given live JavaScript value into a base64 encoded byte string of XDR formatted bytes. The arguments and output are the same as `XDR.serialize()`, except instead for a `Uint8Array` of bytes, it returns a base64 encoded string of bytes.
 
