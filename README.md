@@ -1,4 +1,4 @@
-# SimpleXDR
+# simple-xdr
 
 A library for encoding and decoding XDR data within the browser or browser-like environments.
 
