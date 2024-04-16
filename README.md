@@ -107,6 +107,8 @@ The returned value can be saved as a .json file and used to more efficiently loa
 
 Takes an object previously returned from a `XDR.export()` call and loads the given types directly into the XDR object for use. This bypasses the need to fetch and parse .X file and thus allows for far more efficient production loading of types. Many types can be loaded in one call, and no .X parsing is done with this function. 
 
+The `types` argument may also be a string, in which case it is resolved to a URL relative to the current module's base url, and then fetched and parsed as a JSON object. 
+
 The optional `options` object can contain the same keys as the types object, and each value is an options object used when loading that given type - with the same options available as the `options` argument to the `XDR.factory()`  function above.
 
 The optional `defaultOptions` object can be used to create a template `options` object which will be used as the default options for all type loaded. The options in this object will be overridden on a per-option basis by the options in the `options` object.
