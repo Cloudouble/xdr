@@ -644,6 +644,7 @@ const XDR = {
         return retval
     },
     load: async function (types = {}, options = {}, defaultOptions = {}) {
+        if (typeof types === 'string') types = await fetch((new URL(types, import.meta.url)).href).then(r => r.json())
         if (!types || (typeof types !== 'object')) throw new Error('types must be an object')
         if (typeof types !== 'object') throw new Error('options must be an object')
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
