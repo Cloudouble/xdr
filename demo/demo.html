@@ -101,6 +101,8 @@
             types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
         }
 
+        // console.log('line 104', JSON.stringify(stellar['transaction-envelope'].manifest).length, stellar['transaction-envelope'].manifest)
+
 
         const show = (v) => JSON.stringify(Array.from(v))
 

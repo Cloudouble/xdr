@@ -578,17 +578,29 @@ function parseX(xCode, className) {
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
     let entry
-    const dependedTypes = new Set()
+    const usedEnums = new Set(), dependedTypes = new Set()
     for (const name in unions) for (const a in unions[name].arms) dependedTypes.add(unions[name].arms[a].type)
     for (const name in structs) for (const p in structs[name]) dependedTypes.add(structs[name][p].type)
+    for (const name in typedefs) dependedTypes.add(typedefs[name].type)
     for (const name of Object.keys(structs).concat(Object.keys(unions))) if (!dependedTypes.has(name)) { entry = name; break }
     if (!entry) throw new Error('no entry found')
+
+
+    dependedTypes.add(entry)
+    // console.log('line 590', dependedTypes)
+    // for (const name in typedefs) if (!dependedTypes.has(name)) delete typedefs[name]
+    // for (const name in unions) if (!dependedTypes.has(name)) delete unions[name]
+    // for (const name in structs) if (!dependedTypes.has(name)) delete structs[name]
+
+    for (const [k, v] of Object.entries(unions)) usedEnums.add(v.discriminant.type)
+    for (const enumName in enums) if (!usedEnums.has(enumName)) delete enums[enumName]
+
     const typeClass = class extends BaseClass {
         static entry = entry
         static manifest = {
             ...BaseClass.manifest,
             name: this.name, namespace: this.namespace, entry: this.entry,
-            constants, enums, typedefs, unions, structs,
+            enums, typedefs, unions, structs,
         }
         static name = className
         static namespace = namespace
@@ -623,7 +635,8 @@ const XDR = {
             while (includesMatches.length) {
                 for (const includeMatch of includesMatches) {
                     const includeURL = includes(includeMatch[0], baseUri)
-                    str = urlsFetched[includeURL] ? str.replace(includeMatch[0], `\n\n`) : str.replace(includeMatch[0], `\n\n${await (await fetch(includeURL)).text()}\n\n`)
+                    str = urlsFetched[includeURL] ? str.replace(includeMatch[0], `\n\n`) : str.replace(includeMatch[0], `\n\n${await (await fetch(includeURL)).text()
+                        } \n\n`)
                     urlsFetched[includeURL] = true
                 }
                 includesMatches = Array.from(str.matchAll(rx.includes))
@@ -676,7 +689,7 @@ const XDR = {
     },
     deserialize: function (bytes, typeDef, arrayLength, arrayMode, raw) {
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
-        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef}`)
+        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
         if (!arrayLength || typeDef.isImplicitArray) {
             const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))
             return raw ? r : r.value
@@ -696,7 +709,7 @@ const XDR = {
         return result
     },
     serialize: function (value, typeDef, arrayLength, arrayMode) {
-        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef}`)
+        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
         if (!arrayLength || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))).bytes
         if (!Array.isArray(value)) throw new Error('value must be an array')
         if (arrayMode !== 'variable') arrayMode = 'fixed'
