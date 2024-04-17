@@ -480,7 +480,7 @@ const BaseClass = class extends TypeDef {
 }
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
-function parseX(xCode, className) {
+function parseX(xCode, className, entry) {
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
@@ -577,21 +577,23 @@ function parseX(xCode, className) {
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
-    let entry
-    const usedEnums = new Set(), dependedTypes = new Set()
-    for (const name in unions) for (const a in unions[name].arms) dependedTypes.add(unions[name].arms[a].type)
-    for (const name in structs) for (const p in structs[name]) dependedTypes.add(structs[name][p].type)
-    for (const name in typedefs) dependedTypes.add(typedefs[name].type)
-    for (const name of Object.keys(structs).concat(Object.keys(unions))) if (!dependedTypes.has(name)) { entry = name; break }
+    if (!entry) {
+        const dependedTypes = new Set()
+        for (const name in unions) for (const a in unions[name].arms) dependedTypes.add(unions[name].arms[a].type)
+        for (const name in structs) for (const p in structs[name]) dependedTypes.add(structs[name][p].type)
+        for (const name in typedefs) dependedTypes.add(typedefs[name].type)
+        for (const name of Object.keys(structs).concat(Object.keys(unions))) if (!dependedTypes.has(name)) { entry = name; break }
+    }
     if (!entry) throw new Error('no entry found')
 
 
-    dependedTypes.add(entry)
+    // dependedTypes.add(entry)
     // console.log('line 590', dependedTypes)
     // for (const name in typedefs) if (!dependedTypes.has(name)) delete typedefs[name]
     // for (const name in unions) if (!dependedTypes.has(name)) delete unions[name]
     // for (const name in structs) if (!dependedTypes.has(name)) delete structs[name]
 
+    const usedEnums = new Set()
     for (const [k, v] of Object.entries(unions)) usedEnums.add(v.discriminant.type)
     for (const enumName in enums) if (!usedEnums.has(enumName)) delete enums[enumName]
 
@@ -642,7 +644,7 @@ const XDR = {
                 includesMatches = Array.from(str.matchAll(rx.includes))
             }
         }
-        const typeClass = parseX(str, typeKey)
+        const typeClass = parseX(str, typeKey, entry)
         if (entry) typeClass.entry = typeClass.manifest.entry = entry
         if (namespace) typeClass.namespace = namespace
         if (typeClass.namespace) {
