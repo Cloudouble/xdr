@@ -216,7 +216,8 @@ const rx = {
     structAnonymousFlat: /struct\s*\{(?<body>[^\{\}]*?)\}\s+(?<name>\w+)\s*;/g,
     unionAnonymousFlat: /union\s+switch\s*\((?<discriminant>[^\)]+?)\)\s*\{(?<body>[^\{\}]*?)\}\s+(?<name>\w+)\s*;/g,
     typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g, namespace: /^\s*namespace\s+([\w]+)\s*\{/m,
-    includes: /\%\#include\s+\".+\"/g, unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm, blankLines: /^\s*[\r\n]/gm
+    includes: /\%\#include\s+\".+\"/g, unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
+    blankLines: /^\s*[\r\n]/gm, dashes: /-/g
 }
 
 const parseTypeLengthModeIdentifier = function (declaration, constants) {
@@ -553,16 +554,16 @@ function parseX(xCode, className, entry) {
         }
         return [unionName, discriminant, arms]
     }
-    let anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)), anonymousStructCounter = 0,
-        anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat)), anonymousUnionCounter = 0
+    let anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)),
+        anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
     while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
         for (const m of anonymousFlatStructMatches) {
-            const [identifier, map] = buildStructFromMatch(m), structName = `anonymousStructType${++anonymousStructCounter}`
+            const [identifier, map] = buildStructFromMatch(m), structName = `aStruct${crypto.randomUUID().replace(rx.dashes, '')}`
             structs[structName] = map
             xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
         }
         for (const m of anonymousFlatUnionMatches) {
-            const [identifier, discriminant, arms] = buildUnionFromMatch(m), unionName = `anonymousUnionType${++anonymousUnionCounter}`
+            const [identifier, discriminant, arms] = buildUnionFromMatch(m), unionName = `aUnion${crypto.randomUUID().replace(rx.dashes, '')}`
             unions[unionName] = { discriminant, arms }
             xCode = xCode.replace(m[0], `\n${unionName} ${identifier};\n`).replace(rx.blankLines, '').trim()
         }
@@ -656,13 +657,29 @@ const XDR = {
         }
         return this.types[typeKey] = typeClass
     },
-    export: function (namespace) {
+    export: function (namespace, compact = true, format = 'xdr') {
         const source = namespace ? this.types[namespace] : this.types, retval = {}
+        format = format === 'json' ? 'json' : 'xdr'
         for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) retval[k] = JSON.parse(JSON.stringify(v.manifest))
+        if (compact) {
+            const common = { enums: {}, structs: {}, typedefs: {}, unions: {} }
+            for (const typeKey in retval) for (const scope in common) common[scope] = { ...common[scope], ...(retval[typeKey][scope] ?? {}) }
+            for (const typeKey in retval) for (const scope in common) retval[typeKey][scope] = Object.keys(retval[typeKey][scope])
+            retval.__common__ = { ...common }
+        }
         return retval
     },
-    load: async function (types = {}, options = {}, defaultOptions = {}) {
-        if (typeof types === 'string') types = await fetch((new URL(types, import.meta.url)).href).then(r => r.json())
+    load: async function (types = {}, options = {}, defaultOptions = {}, format = 'xdr') {
+        format = format === 'json' ? 'json' : 'xdr'
+        if (typeof types === 'string') {
+            types = await fetch((new URL(types, import.meta.url)).href).then(r => r.text())
+            switch (format) {
+                case 'json': types = JSON.parse(types); break;
+                default:
+                    const loadTypeDef = undefined // TODO
+                    types = this.parse(types, loadTypeDef)
+            }
+        }
         if (!types || (typeof types !== 'object')) throw new Error('types must be an object')
         if (typeof types !== 'object') throw new Error('options must be an object')
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
