@@ -209,6 +209,10 @@ class voidType extends TypeDef {
 
 }
 
+class manifestType extends TypeDef {
+
+}
+
 const rx = {
     'const': /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g, 'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
     struct: /struct\s+(?<name>\w+)\s*\{(?<body>[^\{\}]*?)\}\s*;|typedef\s+struct\s*\{(?<bodyTypeDef>[^\{\}]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
@@ -616,7 +620,7 @@ function parseX(xCode, className, entry) {
 }
 
 const XDR = {
-    version: '1.1.1',
+    version: '1.1.2',
     createEnum,
     factory: async function (str, options) {
         const namespace = options?.namespace, entry = options?.entry
@@ -665,7 +669,17 @@ const XDR = {
             const common = { enums: {}, structs: {}, typedefs: {}, unions: {} }
             for (const typeKey in retval) for (const scope in common) common[scope] = { ...common[scope], ...(retval[typeKey][scope] ?? {}) }
             for (const typeKey in retval) for (const scope in common) retval[typeKey][scope] = Object.keys(retval[typeKey][scope])
-            retval[this.options.commonKey] = { ...common }
+            if (format === 'xdr') {
+                const xdrValue = { types: Object.entries(retval), common: {} }
+                for (const unionName in common.unions) common.unions[unionName].arms = Object.entries(common.unions[unionName].arms)
+                for (const scope in common) common[scope] = Object.entries(common[scope])
+                xdrValue.common = Object.entries(common)
+
+                // console.log('line 678', xdrValue)
+                return xdrValue
+            } else {
+                retval[this.options.commonKey] = { ...common }
+            }
         }
         return retval
     },
@@ -673,12 +687,7 @@ const XDR = {
         format = format === 'json' ? 'json' : 'xdr'
         if (typeof types === 'string') {
             types = await fetch((new URL(types, import.meta.url)).href).then(r => r.text())
-            switch (format) {
-                case 'json': types = JSON.parse(types); break;
-                default:
-                    const loadTypeDef = undefined // TODO
-                    types = this.parse(types, loadTypeDef)
-            }
+            types = format === 'json' ? JSON.parse(types) : this.parse(types, manifestType)
         }
         if (!types || (typeof types !== 'object')) throw new Error('types must be an object')
         if (typeof types !== 'object') throw new Error('options must be an object')
