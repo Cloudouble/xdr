@@ -245,7 +245,9 @@ const parseTypeLengthModeIdentifier = function (declaration, constants) {
 
 function createEnum(body, name) {
     body ||= 0
-    if (body && (!Array.isArray(body) || !body.length || !(body.every(i => typeof i === 'string') || body.every(i => typeof i === 'boolean')))) throw new Error('enum must have a body array of string or boolean identifiers')
+    if (body && (!Array.isArray(body) || !body.length ||
+        !(body.every(i => (i == null || typeof i === 'string')) || body.every(i => (i == null || typeof i === 'boolean')))))
+        throw new Error(`enum must have a body array of string or boolean identifiers: body: ${JSON.stringify(body)}, name: ${name}`)
     return class extends intType {
 
         static name = name
@@ -586,24 +588,25 @@ function parseX(xCode, className, entry) {
     }
     if (!entry) throw new Error('no entry found')
 
-
-    // dependedTypes.add(entry)
-    // console.log('line 590', dependedTypes)
-    // for (const name in typedefs) if (!dependedTypes.has(name)) delete typedefs[name]
-    // for (const name in unions) if (!dependedTypes.has(name)) delete unions[name]
-    // for (const name in structs) if (!dependedTypes.has(name)) delete structs[name]
-
-    const usedEnums = new Set()
-    for (const [k, v] of Object.entries(unions)) usedEnums.add(v.discriminant.type)
-    for (const enumName in enums) if (!usedEnums.has(enumName)) delete enums[enumName]
+    const all = { structs, unions, typedefs }, used = { structs: {}, unions: {}, typedefs: {}, enums: {} }, allUsed = new Set(),
+        addUsedMembers = typeName => {
+            if (allUsed.has(typeName)) return
+            const [typeIsMemberOf, entries] = typeName in unions
+                ? ['unions', Object.entries(unions[typeName].arms)] : (typeName in structs
+                    ? ['structs', structs[typeName].entries()] : (typeName in typedefs
+                        ? ['typedefs', [[0, typedefs[typeName]]]] : [undefined, undefined]))
+            if (!typeIsMemberOf) return
+            used[typeIsMemberOf][typeName] = all[typeIsMemberOf][typeName] instanceof Map
+                ? new Map(all[typeIsMemberOf][typeName].entries()) : { ...(all[typeIsMemberOf][typeName]) }
+            allUsed.add(typeName);
+            for (const [k, v] of entries) addUsedMembers(v.type)
+        }
+    addUsedMembers(entry)
+    for (const [k, v] of Object.entries(unions)) if (enums[v.discriminant.type]) used.enums[v.discriminant.type] = [...enums[v.discriminant.type]]
 
     const typeClass = class extends BaseClass {
         static entry = entry
-        static manifest = {
-            ...BaseClass.manifest,
-            name: this.name, namespace: this.namespace, entry: this.entry,
-            enums, typedefs, unions, structs,
-        }
+        static manifest = { ...BaseClass.manifest, name: this.name, namespace: this.namespace, entry: this.entry, ...used }
         static name = className
         static namespace = namespace
     }
