@@ -665,7 +665,7 @@ const XDR = {
             const common = { enums: {}, structs: {}, typedefs: {}, unions: {} }
             for (const typeKey in retval) for (const scope in common) common[scope] = { ...common[scope], ...(retval[typeKey][scope] ?? {}) }
             for (const typeKey in retval) for (const scope in common) retval[typeKey][scope] = Object.keys(retval[typeKey][scope])
-            retval.__common__ = { ...common }
+            retval[this.options.commonKey] = { ...common }
         }
         return retval
     },
@@ -683,10 +683,18 @@ const XDR = {
         if (!types || (typeof types !== 'object')) throw new Error('types must be an object')
         if (typeof types !== 'object') throw new Error('options must be an object')
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
+        const commonTypes = this.options.commonKey ? types[this.options.commonKey] : undefined
         for (let [typeKey, type] of Object.entries(types)) {
             const typeOptions = { ...(options[typeKey] ?? defaultOptions) }
             if (typeof type === 'string') type = await this.factory(type, typeOptions)
             if (!(type.prototype && (type.prototype instanceof TypeDef)) && type instanceof Object) {
+                if (commonTypes) {
+                    for (const scope in commonTypes) {
+                        const expandedScope = {}
+                        if (type[scope]) for (const t of type[scope]) expandedScope[t] = commonTypes[scope][t]
+                        type[scope] = expandedScope
+                    }
+                }
                 const typeManifest = { ...type }
                 type = class extends BaseClass {
                     static entry = typeOptions.entry ?? typeManifest.entry
@@ -761,7 +769,8 @@ const XDR = {
     options: {
         includes: (match, baseUri) => {
             return new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href
-        }
+        },
+        commonKey: '__common__'
     }
 }
 
