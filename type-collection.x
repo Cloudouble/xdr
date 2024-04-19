@@ -14,20 +14,20 @@ struct Parameters {
 
 struct TypeParameters {
     Name type;
-    Parameters params;
+    Parameters *params;
  };
 
 struct PropertyParameters {
     Name type;
     Name identifier;
-    Parameters params;
+    Parameters *params;
 };
 
 struct ArmParameters {
     Name type;
     Name arm;
     Name *identifier;
-    Parameters params;
+    Parameters *params;
 };
 
 struct Discriminant {

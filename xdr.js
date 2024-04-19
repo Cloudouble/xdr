@@ -665,25 +665,61 @@ const XDR = {
         const source = namespace ? this.types[namespace] : this.types, retval = {}
         format = format === 'json' ? 'json' : 'xdr'
         for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) retval[k] = JSON.parse(JSON.stringify(v.manifest))
+        console.log('line 668', retval)
         if (compact) {
-            const library = { enums: [], structs: [], typedefs: [], unions: [] }
-            for (const typeKey in retval) for (const scope in library) library[scope] = { ...library[scope], ...(retval[typeKey][scope] ?? {}) }
-            for (const typeKey in retval) for (const scope in library) retval[typeKey][scope] = Object.keys(retval[typeKey][scope])
-            if (format === 'xdr') {
-                const xdrValue = { types: Object.entries(retval).map(ent => ({ key: ent[0], manifest: ent[1] })), library: {} }
-                for (const unionName in library.unions) library.unions[unionName].arms = library.unions[unionName].arms
-                for (const scope in library) library[scope] = library[scope]
-                xdrValue.library = library
+            const typeCollection = { library: { enums: [], structs: [], typedefs: [], unions: [] }, types: [] }
+            for (const typeKey in retval) {
 
-                // console.log('line 678', xdrValue)
-                return xdrValue
-            } else {
-                retval[this.options.libraryKey] = { ...library }
+                for (const key in retval[typeKey].enums) {
+                    typeCollection.library.enums.push({
+                        key, body: retval[typeKey].enums[key].map((identifier, value) => identifier ? { value, identifier } : null).filter(n => n)
+                    })
+                }
+
+                for (const key in retval[typeKey].structs) {
+                    const properties = []
+                    for (const property of retval[typeKey].structs[key]) {
+                        const [identifier, p] = property, { type } = p, params = {}
+                        for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
+                        const declaration = Object.keys(params).length ? { type, identifier, params } : { type, identifier }
+                        properties.push(declaration)
+                    }
+                    typeCollection.library.structs.push({ key, properties })
+                }
+
+                for (const key in retval[typeKey].typedefs) {
+                    const p = retval[typeKey].typedefs[key], { type } = p, params = {}
+                    for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
+                    const declaration = Object.keys(params).length ? { type, params } : { type }
+                    typeCollection.library.typedefs.push({ key, declaration })
+                }
+
+
+
+
+                const manifest = JSON.parse(JSON.stringify(retval[typeKey]))
+                for (const scope in typeCollection.library) manifest[scope] = Object.keys(manifest[scope])
+                typeCollection.types.push({ key: typeKey, manifest })
             }
+            return typeCollection
+            // const library = { enums: [], structs: [], typedefs: [], unions: [] }
+            // for (const typeKey in retval) for (const scope in library) library[scope] = { ...library[scope], ...(retval[typeKey][scope] ?? {}) }
+            // for (const typeKey in retval) for (const scope in library) retval[typeKey][scope] = Object.keys(retval[typeKey][scope])
+            // if (format === 'xdr') {
+            //     const xdrValue = { types: Object.entries(retval).map(ent => ({ key: ent[0], manifest: ent[1] })), library: {} }
+            //     for (const unionName in library.unions) library.unions[unionName].arms = library.unions[unionName].arms
+            //     for (const scope in library) library[scope] = library[scope]
+            //     xdrValue.library = library
+
+            //     // console.log('line 678', xdrValue)
+            //     return xdrValue
+            // } else {
+            //     retval[this.options.libraryKey] = { ...library }
+            // }
         }
         return retval
     },
-    load: async function (types = {}, options = {}, defaultOptions = {}, format = 'xdr') {
+    import: async function (types = {}, options = {}, defaultOptions = {}, format = 'xdr') {
         format = format === 'json' ? 'json' : 'xdr'
         if (typeof types === 'string') {
             types = await fetch((new URL(types, import.meta.url)).href).then(r => r.text())
