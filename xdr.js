@@ -662,62 +662,55 @@ const XDR = {
         return this.types[typeKey] = typeClass
     },
     export: function (namespace, compact = true, format = 'xdr') {
-        const source = namespace ? this.types[namespace] : this.types, retval = {}
+        const source = namespace ? this.types[namespace] : this.types, exported = {}
         format = format === 'json' ? 'json' : 'xdr'
-        for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) retval[k] = JSON.parse(JSON.stringify(v.manifest))
-        console.log('line 668', retval)
-        if (compact) {
-            const typeCollection = { library: { enums: [], structs: [], typedefs: [], unions: [] }, types: [] }
-            for (const typeKey in retval) {
+        for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) exported[k] = JSON.parse(JSON.stringify(v.manifest))
+        console.log('line 668', JSON.stringify(exported).length)
+        if (!compact) return exported
+        const typeCollection = { library: { enums: [], structs: [], typedefs: [], unions: [] }, types: [] }
+        for (const typeKey in exported) {
 
-                for (const key in retval[typeKey].enums) {
-                    typeCollection.library.enums.push({
-                        key, body: retval[typeKey].enums[key].map((identifier, value) => identifier ? { value, identifier } : null).filter(n => n)
-                    })
-                }
-
-                for (const key in retval[typeKey].structs) {
-                    const properties = []
-                    for (const property of retval[typeKey].structs[key]) {
-                        const [identifier, p] = property, { type } = p, params = {}
-                        for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
-                        const declaration = Object.keys(params).length ? { type, identifier, params } : { type, identifier }
-                        properties.push(declaration)
-                    }
-                    typeCollection.library.structs.push({ key, properties })
-                }
-
-                for (const key in retval[typeKey].typedefs) {
-                    const p = retval[typeKey].typedefs[key], { type } = p, params = {}
-                    for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
-                    const declaration = Object.keys(params).length ? { type, params } : { type }
-                    typeCollection.library.typedefs.push({ key, declaration })
-                }
-
-
-
-
-                const manifest = JSON.parse(JSON.stringify(retval[typeKey]))
-                for (const scope in typeCollection.library) manifest[scope] = Object.keys(manifest[scope])
-                typeCollection.types.push({ key: typeKey, manifest })
+            for (const key in exported[typeKey].enums) {
+                typeCollection.library.enums.push({
+                    key, body: exported[typeKey].enums[key].map((identifier, value) => identifier ? { value, identifier } : null).filter(n => n)
+                })
             }
-            return typeCollection
-            // const library = { enums: [], structs: [], typedefs: [], unions: [] }
-            // for (const typeKey in retval) for (const scope in library) library[scope] = { ...library[scope], ...(retval[typeKey][scope] ?? {}) }
-            // for (const typeKey in retval) for (const scope in library) retval[typeKey][scope] = Object.keys(retval[typeKey][scope])
-            // if (format === 'xdr') {
-            //     const xdrValue = { types: Object.entries(retval).map(ent => ({ key: ent[0], manifest: ent[1] })), library: {} }
-            //     for (const unionName in library.unions) library.unions[unionName].arms = library.unions[unionName].arms
-            //     for (const scope in library) library[scope] = library[scope]
-            //     xdrValue.library = library
 
-            //     // console.log('line 678', xdrValue)
-            //     return xdrValue
-            // } else {
-            //     retval[this.options.libraryKey] = { ...library }
-            // }
+            for (const key in exported[typeKey].structs) {
+                const properties = []
+                for (const property of exported[typeKey].structs[key]) {
+                    const [identifier, p] = property, { type } = p, params = {}
+                    for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
+                    const declaration = Object.keys(params).length ? { type, identifier, params } : { type, identifier }
+                    properties.push(declaration)
+                }
+                typeCollection.library.structs.push({ key, properties })
+            }
+
+            for (const key in exported[typeKey].typedefs) {
+                const p = exported[typeKey].typedefs[key], { type } = p, params = {}
+                for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
+                const declaration = Object.keys(params).length ? { type, params } : { type }
+                typeCollection.library.typedefs.push({ key, declaration })
+            }
+
+            for (const key in exported[typeKey].unions) {
+                const discriminant = { ...exported[typeKey].unions[key].discriminant }, arms = []
+                for (const arm in exported[typeKey].unions[key].arms) {
+                    const a = exported[typeKey].unions[key].arms[arm], { identifier, type } = a, declaration = { type, arm }, params = {}
+                    for (const k of ['length', 'mode', 'optional', 'unsigned']) if (a[k]) params[k] = a[k]
+                    if (identifier) declaration.identifier = identifier
+                    if (Object.keys(params).length) declaration.params = params
+                    arms.push(declaration)
+                }
+                typeCollection.library.unions.push({ key, discriminant, arms })
+            }
+            const manifest = { ...exported[typeKey] }
+            for (const scope in typeCollection.library) manifest[scope] = Object.keys(exported[typeKey][scope])
+            typeCollection.types.push({ key: typeKey, manifest })
         }
-        return retval
+        console.log('line 712', JSON.stringify(typeCollection).length)
+        return typeCollection
     },
     import: async function (types = {}, options = {}, defaultOptions = {}, format = 'xdr') {
         format = format === 'json' ? 'json' : 'xdr'
