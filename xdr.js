@@ -666,19 +666,19 @@ const XDR = {
         format = format === 'json' ? 'json' : 'xdr'
         for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) retval[k] = JSON.parse(JSON.stringify(v.manifest))
         if (compact) {
-            const common = { enums: {}, structs: {}, typedefs: {}, unions: {} }
-            for (const typeKey in retval) for (const scope in common) common[scope] = { ...common[scope], ...(retval[typeKey][scope] ?? {}) }
-            for (const typeKey in retval) for (const scope in common) retval[typeKey][scope] = Object.keys(retval[typeKey][scope])
+            const library = { enums: [], structs: [], typedefs: [], unions: [] }
+            for (const typeKey in retval) for (const scope in library) library[scope] = { ...library[scope], ...(retval[typeKey][scope] ?? {}) }
+            for (const typeKey in retval) for (const scope in library) retval[typeKey][scope] = Object.keys(retval[typeKey][scope])
             if (format === 'xdr') {
-                const xdrValue = { types: Object.entries(retval), common: {} }
-                for (const unionName in common.unions) common.unions[unionName].arms = Object.entries(common.unions[unionName].arms)
-                for (const scope in common) common[scope] = Object.entries(common[scope])
-                xdrValue.common = Object.entries(common)
+                const xdrValue = { types: Object.entries(retval).map(ent => ({ key: ent[0], manifest: ent[1] })), library: {} }
+                for (const unionName in library.unions) library.unions[unionName].arms = library.unions[unionName].arms
+                for (const scope in library) library[scope] = library[scope]
+                xdrValue.library = library
 
                 // console.log('line 678', xdrValue)
                 return xdrValue
             } else {
-                retval[this.options.commonKey] = { ...common }
+                retval[this.options.libraryKey] = { ...library }
             }
         }
         return retval
@@ -692,15 +692,15 @@ const XDR = {
         if (!types || (typeof types !== 'object')) throw new Error('types must be an object')
         if (typeof types !== 'object') throw new Error('options must be an object')
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
-        const commonTypes = this.options.commonKey ? types[this.options.commonKey] : undefined
+        const libraryTypes = this.options.libraryKey ? types[this.options.libraryKey] : undefined
         for (let [typeKey, type] of Object.entries(types)) {
             const typeOptions = { ...(options[typeKey] ?? defaultOptions) }
             if (typeof type === 'string') type = await this.factory(type, typeOptions)
             if (!(type.prototype && (type.prototype instanceof TypeDef)) && type instanceof Object) {
-                if (commonTypes) {
-                    for (const scope in commonTypes) {
+                if (libraryTypes) {
+                    for (const scope in libraryTypes) {
                         const expandedScope = {}
-                        if (type[scope]) for (const t of type[scope]) expandedScope[t] = commonTypes[scope][t]
+                        if (type[scope]) for (const t of type[scope]) expandedScope[t] = libraryTypes[scope][t]
                         type[scope] = expandedScope
                     }
                 }
@@ -779,7 +779,7 @@ const XDR = {
         includes: (match, baseUri) => {
             return new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href
         },
-        commonKey: '__common__'
+        libraryKey: '__library__'
     }
 }
 
