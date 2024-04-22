@@ -785,9 +785,7 @@ const XDR = {
         opaque: opaqueType, string: stringType, void: voidType
     },
     options: {
-        includes: (match, baseUri) => {
-            return new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href
-        },
+        includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
         libraryKey: '__library__'
     }
 }
