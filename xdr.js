@@ -308,10 +308,10 @@ const manifestToJson = manifest => {
 
 const BaseClass = class extends TypeDef {
 
-    static entry
     static manifest = {}
-    static name
-    static namespace
+    static get entry() { return this.manifest.entry }
+    static get namespace() { return this.manifest.namespace }
+    static get name() { return this.manifest.name }
 
     static serialize(value, instance, declaration) {
         let type = declaration?.type ?? this.manifest.entry, result
@@ -490,6 +490,7 @@ Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { retur
 function parseX(xCode, entry, name) {
     if (!entry) throw new Error('no entry defined')
     if (!xCode || (typeof xCode !== 'string')) return
+    name ??= entry
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
     let namespace = (xCode.match(rx.namespace) ?? [])[1]
@@ -505,14 +506,14 @@ function parseX(xCode, entry, name) {
     for (const m of xCode.matchAll(rx.enum)) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', enumName = isTypeDef ? m[4] : m[1], enumBody = isTypeDef ? m[3] : m[2], body = []
         for (const condition of enumBody.split(',')) {
-            let [name, value] = condition.split('=').map(s => s.trim())
-            if (!name || !value) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
+            let [conditionName, value] = condition.split('=').map(s => s.trim())
+            if (!conditionName || !value) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
             let intValue = parseInt(value, value[0] === '0' && value[1] !== '.' && value[1] !== 'x' ? 8 : undefined)
             if (!Number.isInteger(intValue) && (value in constants)) intValue = constants[value]
             if (!Number.isInteger(intValue)) for (const en in enums) if (enums[en].indexOf(value) > -1) { intValue = enums[en].indexOf(value); break }
             if (!Number.isInteger(intValue)) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
             value = intValue
-            body[value] = name
+            body[value] = conditionName
         }
         enums[enumName] = body
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
@@ -540,9 +541,9 @@ function parseX(xCode, entry, name) {
             if (!armDeclaration) { queuedArms.push(discriminantValue); continue }
             if (armDeclaration[armDeclaration.length - 1] === ';') armDeclaration = armDeclaration.slice(0, -1).trim()
             const processArm = (c, cb) => {
-                const [name, map] = cb(mm)
-                c[name] = map
-                arms[discriminantValue] = { type: name }
+                const [n, map] = cb(mm)
+                c[n] = map
+                arms[discriminantValue] = { type: n }
             }
             switch (armDeclaration.split(rx.space)[0]) {
                 case 'struct':
@@ -603,10 +604,7 @@ function parseX(xCode, entry, name) {
     for (const [k, v] of Object.entries(unions)) if (enums[v.discriminant.type]) used.enums[v.discriminant.type] = [...enums[v.discriminant.type]]
 
     const typeClass = class extends BaseClass {
-        static entry = entry
-        static manifest = { ...BaseClass.manifest, name: this.name, namespace: this.namespace, entry: this.entry, ...used }
-        static name = name ?? entry
-        static namespace = namespace
+        static manifest = { ...BaseClass.manifest, name, namespace, entry, ...used }
     }
     Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
     return typeClass
@@ -646,8 +644,8 @@ const XDR = {
             }
         }
         const typeClass = parseX(str, entry, typeKey)
-        typeClass.entry = typeClass.manifest.entry = entry
-        if (namespace) typeClass.namespace = namespace
+        typeClass.manifest.entry = entry
+        if (namespace) typeClass.manifest.namespace = namespace
         if (typeClass.namespace) {
             this.types[typeClass.namespace] ||= {}
             return this.types[typeClass.namespace][typeKey] = typeClass
