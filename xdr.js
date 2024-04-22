@@ -645,32 +645,31 @@ const XDR = {
         format = format === 'json' ? 'json' : 'xdr'
         for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) typeManifests[k] = JSON.parse(JSON.stringify(v.manifest))
         const typeCollection = { library: { enums: [], structs: [], typedefs: [], unions: [] }, types: [] }
-        for (const typeKey in typeManifests) {
-            for (const key in typeManifests[typeKey].enums) {
-                typeCollection.library.enums.push({
-                    key, body: typeManifests[typeKey].enums[key].map((identifier, value) => identifier ? { value, identifier } : null).filter(n => n)
-                })
-            }
-            for (const key in typeManifests[typeKey].structs) {
+        for (const name in typeManifests) {
+            const manifest = { ...typeManifests[name] }
+            for (const key in manifest.enums) typeCollection.library.enums.push({
+                key, body: manifest.enums[key].map((identifier, value) => identifier ? { value, identifier } : null).filter(n => n)
+            })
+            for (const key in manifest.structs) {
                 const properties = []
-                for (const property of typeManifests[typeKey].structs[key]) {
-                    const [identifier, p] = property, { type } = p, params = {}
+                for (const property of manifest.structs[key]) {
+                    const [identifier, p] = property, { type } = p, params = {}, declaration = { type, identifier }
                     for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
-                    const declaration = Object.keys(params).length ? { type, identifier, params } : { type, identifier }
+                    if (Object.keys(params).length) declaration.params = params
                     properties.push(declaration)
                 }
                 typeCollection.library.structs.push({ key, properties })
             }
-            for (const key in typeManifests[typeKey].typedefs) {
-                const p = typeManifests[typeKey].typedefs[key], { type } = p, params = {}
+            for (const key in manifest.typedefs) {
+                const p = manifest.typedefs[key], { type } = p, params = {}, declaration = { type }
                 for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
-                const declaration = Object.keys(params).length ? { type, params } : { type }
+                if (Object.keys(params).length) declaration.params = params
                 typeCollection.library.typedefs.push({ key, declaration })
             }
-            for (const key in typeManifests[typeKey].unions) {
-                const discriminant = { ...typeManifests[typeKey].unions[key].discriminant }, arms = []
-                for (const arm in typeManifests[typeKey].unions[key].arms) {
-                    const a = typeManifests[typeKey].unions[key].arms[arm], { identifier, type } = a, declaration = { type, arm }, params = {}
+            for (const key in manifest.unions) {
+                const discriminant = { ...manifest.unions[key].discriminant }, arms = []
+                for (const arm in manifest.unions[key].arms) {
+                    const a = manifest.unions[key].arms[arm], { identifier, type } = a, declaration = { type, arm }, params = {}
                     for (const k of ['length', 'mode', 'optional', 'unsigned']) if (a[k]) params[k] = a[k]
                     if (identifier) declaration.identifier = identifier
                     if (Object.keys(params).length) declaration.params = params
@@ -678,32 +677,31 @@ const XDR = {
                 }
                 typeCollection.library.unions.push({ key, discriminant, arms })
             }
-            const manifest = { ...typeManifests[typeKey] }
-            for (const scope in typeCollection.library) manifest[scope] = Object.keys(typeManifests[typeKey][scope])
+            for (const scope in typeCollection.library) manifest[scope] = Object.keys(manifest[scope])
             typeCollection.types.push({ key: typeKey, manifest })
         }
 
-        console.log('line 707', JSON.stringify(typeCollection).length)
+        console.log('line 684', JSON.stringify(typeCollection).length)
 
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
 
         const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
 
-        console.log('line 713', TypeCollectionType.manifest)
+        console.log('line 690', TypeCollectionType.manifest)
 
         return typeCollection
     },
-    import: async function (types = {}, options = {}, defaultOptions = {}, format = 'xdr') {
+    import: async function (typeCollection = {}, options = {}, defaultOptions = {}, format = 'xdr') {
         format = format === 'json' ? 'json' : 'xdr'
-        if (typeof types === 'string') {
-            types = await fetch((new URL(types, import.meta.url)).href).then(r => r.text())
-            types = format === 'json' ? JSON.parse(types) : this.parse(types, manifestType)
+        if (typeof typeCollection === 'string') {
+            typeCollection = await fetch((new URL(typeCollection, import.meta.url)).href).then(r => r.text())
+            typeCollection = format === 'json' ? JSON.parse(typeCollection) : this.parse(typeCollection, manifestType)
         }
-        if (!types || (typeof types !== 'object')) throw new Error('types must be an object')
-        if (typeof types !== 'object') throw new Error('options must be an object')
+        if (!typeCollection || (typeof typeCollection !== 'object')) throw new Error('typeCollection must be an object')
+        if (typeof options !== 'object') throw new Error('options must be an object')
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
         const libraryTypes = this.options.libraryKey ? types[this.options.libraryKey] : undefined
-        for (let [typeKey, type] of Object.entries(types)) {
+        for (let [typeKey, type] of Object.entries(typeCollection)) {
             const typeOptions = { ...(options[typeKey] ?? defaultOptions) }, entry = typeOptions?.entry ?? typeKey
             delete typeOptions.entry
             if (typeof type === 'string') type = await this.factory(type, entry, typeOptions)
