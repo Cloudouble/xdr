@@ -487,7 +487,8 @@ const BaseClass = class extends TypeDef {
 }
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
-function parseX(xCode, className, entry) {
+function parseX(xCode, entry, name) {
+    if (!entry) throw new Error('no entry defined')
     if (!xCode || (typeof xCode !== 'string')) return
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
@@ -584,14 +585,6 @@ function parseX(xCode, className, entry) {
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
-    if (!entry) {
-        const dependedTypes = new Set()
-        for (const name in unions) for (const a in unions[name].arms) dependedTypes.add(unions[name].arms[a].type)
-        for (const name in structs) for (const p in structs[name]) dependedTypes.add(structs[name][p].type)
-        for (const name in typedefs) dependedTypes.add(typedefs[name].type)
-        for (const name of Object.keys(structs).concat(Object.keys(unions))) if (!dependedTypes.has(name)) { entry = name; break }
-    }
-    if (!entry) throw new Error('no entry found')
 
     const all = { structs, unions, typedefs }, used = { structs: {}, unions: {}, typedefs: {}, enums: {} }, allUsed = new Set(),
         addUsedMembers = typeName => {
@@ -612,7 +605,7 @@ function parseX(xCode, className, entry) {
     const typeClass = class extends BaseClass {
         static entry = entry
         static manifest = { ...BaseClass.manifest, name: this.name, namespace: this.namespace, entry: this.entry, ...used }
-        static name = className
+        static name = name ?? entry
         static namespace = namespace
     }
     Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
@@ -622,13 +615,13 @@ function parseX(xCode, className, entry) {
 const XDR = {
     version: '1.1.2',
     createEnum,
-    factory: async function (str, options) {
-        const namespace = options?.namespace, entry = options?.entry
+    factory: async function (str, entry, options = {}) {
+        const namespace = options?.namespace
         let includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? document.baseURI, isURL = !str.includes(';'), typeKey
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
-        if (options?.entry && (options?.name === true)) options.name = options.entry
+        if (entry && !options?.name) options.name = entry
         if (isURL) str = new URL(str, document.baseURI).href
-        typeKey = options?.name ?? (isURL ? str : Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
+        typeKey = options.name ?? (isURL ? str : Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
             x => (('00' + x.toString(16)).slice(-2))).join(''))
         if (!namespace && (typeKey in this.types)) return this.types[typeKey]
         if (namespace) {
@@ -652,8 +645,8 @@ const XDR = {
                 includesMatches = Array.from(str.matchAll(rx.includes))
             }
         }
-        const typeClass = parseX(str, typeKey, entry)
-        if (entry) typeClass.entry = typeClass.manifest.entry = entry
+        const typeClass = parseX(str, entry, typeKey)
+        typeClass.entry = typeClass.manifest.entry = entry
         if (namespace) typeClass.namespace = namespace
         if (typeClass.namespace) {
             this.types[typeClass.namespace] ||= {}
@@ -661,24 +654,20 @@ const XDR = {
         }
         return this.types[typeKey] = typeClass
     },
-    export: function (namespace, compact = true, format = 'xdr') {
-        const source = namespace ? this.types[namespace] : this.types, exported = {}
+    export: async function (namespace, format = 'xdr', raw = false) {
+        const source = namespace ? this.types[namespace] : this.types, typeManifests = {}
         format = format === 'json' ? 'json' : 'xdr'
-        for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) exported[k] = JSON.parse(JSON.stringify(v.manifest))
-        console.log('line 668', JSON.stringify(exported).length)
-        if (!compact) return exported
+        for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) typeManifests[k] = JSON.parse(JSON.stringify(v.manifest))
         const typeCollection = { library: { enums: [], structs: [], typedefs: [], unions: [] }, types: [] }
-        for (const typeKey in exported) {
-
-            for (const key in exported[typeKey].enums) {
+        for (const typeKey in typeManifests) {
+            for (const key in typeManifests[typeKey].enums) {
                 typeCollection.library.enums.push({
-                    key, body: exported[typeKey].enums[key].map((identifier, value) => identifier ? { value, identifier } : null).filter(n => n)
+                    key, body: typeManifests[typeKey].enums[key].map((identifier, value) => identifier ? { value, identifier } : null).filter(n => n)
                 })
             }
-
-            for (const key in exported[typeKey].structs) {
+            for (const key in typeManifests[typeKey].structs) {
                 const properties = []
-                for (const property of exported[typeKey].structs[key]) {
+                for (const property of typeManifests[typeKey].structs[key]) {
                     const [identifier, p] = property, { type } = p, params = {}
                     for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
                     const declaration = Object.keys(params).length ? { type, identifier, params } : { type, identifier }
@@ -686,18 +675,16 @@ const XDR = {
                 }
                 typeCollection.library.structs.push({ key, properties })
             }
-
-            for (const key in exported[typeKey].typedefs) {
-                const p = exported[typeKey].typedefs[key], { type } = p, params = {}
+            for (const key in typeManifests[typeKey].typedefs) {
+                const p = typeManifests[typeKey].typedefs[key], { type } = p, params = {}
                 for (const k of ['length', 'mode', 'optional', 'unsigned']) if (p[k]) params[k] = p[k]
                 const declaration = Object.keys(params).length ? { type, params } : { type }
                 typeCollection.library.typedefs.push({ key, declaration })
             }
-
-            for (const key in exported[typeKey].unions) {
-                const discriminant = { ...exported[typeKey].unions[key].discriminant }, arms = []
-                for (const arm in exported[typeKey].unions[key].arms) {
-                    const a = exported[typeKey].unions[key].arms[arm], { identifier, type } = a, declaration = { type, arm }, params = {}
+            for (const key in typeManifests[typeKey].unions) {
+                const discriminant = { ...typeManifests[typeKey].unions[key].discriminant }, arms = []
+                for (const arm in typeManifests[typeKey].unions[key].arms) {
+                    const a = typeManifests[typeKey].unions[key].arms[arm], { identifier, type } = a, declaration = { type, arm }, params = {}
                     for (const k of ['length', 'mode', 'optional', 'unsigned']) if (a[k]) params[k] = a[k]
                     if (identifier) declaration.identifier = identifier
                     if (Object.keys(params).length) declaration.params = params
@@ -705,11 +692,19 @@ const XDR = {
                 }
                 typeCollection.library.unions.push({ key, discriminant, arms })
             }
-            const manifest = { ...exported[typeKey] }
-            for (const scope in typeCollection.library) manifest[scope] = Object.keys(exported[typeKey][scope])
+            const manifest = { ...typeManifests[typeKey] }
+            for (const scope in typeCollection.library) manifest[scope] = Object.keys(typeManifests[typeKey][scope])
             typeCollection.types.push({ key: typeKey, manifest })
         }
-        console.log('line 712', JSON.stringify(typeCollection).length)
+
+        console.log('line 707', JSON.stringify(typeCollection).length)
+
+        if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
+
+        const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
+
+        console.log('line 713', TypeCollectionType.manifest)
+
         return typeCollection
     },
     import: async function (types = {}, options = {}, defaultOptions = {}, format = 'xdr') {
@@ -723,8 +718,9 @@ const XDR = {
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
         const libraryTypes = this.options.libraryKey ? types[this.options.libraryKey] : undefined
         for (let [typeKey, type] of Object.entries(types)) {
-            const typeOptions = { ...(options[typeKey] ?? defaultOptions) }
-            if (typeof type === 'string') type = await this.factory(type, typeOptions)
+            const typeOptions = { ...(options[typeKey] ?? defaultOptions) }, entry = typeOptions?.entry ?? typeKey
+            delete typeOptions.entry
+            if (typeof type === 'string') type = await this.factory(type, entry, typeOptions)
             if (!(type.prototype && (type.prototype instanceof TypeDef)) && type instanceof Object) {
                 if (libraryTypes) {
                     for (const scope in libraryTypes) {
@@ -735,7 +731,7 @@ const XDR = {
                 }
                 const typeManifest = { ...type }
                 type = class extends BaseClass {
-                    static entry = typeOptions.entry ?? typeManifest.entry
+                    static entry = entry ?? typeManifest.entry
                     static manifest = {
                         ...BaseClass.manifest, name: this.name, namespace: this.namespace, entry: this.entry,
                         constants: typeManifest?.constants ?? {}, enums: typeManifest?.enums ?? {},

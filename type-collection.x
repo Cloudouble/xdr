@@ -10,7 +10,7 @@ struct Parameters {
     LengthMode *mode;
     bool *optional;
     bool *unsigned;
-}
+};
 
 struct TypeParameters {
     Name type;

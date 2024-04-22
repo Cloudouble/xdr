@@ -41,13 +41,18 @@
             // as per the XDR: External Data Representation Standard 
             // at https://datatracker.ietf.org/doc/html/rfc4506.html
 
-            fileType = await XDR.factory('file.X'),
+            fileType = await XDR.factory('file.x', 'file')
 
-            // create an instance of the type from a Uint8Array of byte integers 
-            fileInstanceFromBytes = new fileType(fileBytes),
+        console.log('line 46', fileType.manifest)
 
-            // create an instance of the type from a live object that conforms to the type definition
-            fileInstanceFromValue = new fileType(fileValue)
+        // create an instance of the type from a Uint8Array of byte integers 
+        const fileInstanceFromBytes = new fileType(fileBytes)
+
+        console.log('line 51', fileInstanceFromBytes)
+
+
+        // create an instance of the type from a live object that conforms to the type definition
+        const fileInstanceFromValue = new fileType(fileValue)
 
         // console.log("From bytes: ", fileInstanceFromBytes)
         // console.log("From value: ", fileInstanceFromValue)
@@ -79,26 +84,18 @@
         const entry = 'TransactionEnvelope'
 
         const stellar = {
-            scp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x', {
-                entry: 'SCPEnvelope'
-            }),
-            ['contract-config-setting']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-config-setting.x', {
-                entry: 'ConfigSettingEntry'
-            }),
-            ['contract-env-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-env-meta.x', {
-                entry: 'SCEnvMetaEntry'
-            }),
-            ['contract-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-meta.x', { entry: 'SCMetaEntry' }),
-            ['contract-spec']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-spec.x', { entry: 'SCSpecEntry' }),
-            contract: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract.x', { entry: 'SCContractInstance' }),
-            internal: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-internal.x', { entry: 'PersistedSCPState' }),
-            ['ledger-entries']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger-entries.x', { entry: 'LedgerEntry' }),
-            ledger: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x'),
-            overlay: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x'),
-            ['transaction-envelope']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
-                entry: 'TransactionEnvelope', name: 'TransactionEnvelope'
-            }),
-            types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')
+            scp: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x', 'SCPEnvelope'),
+            ['contract-config-setting']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-config-setting.x', 'ConfigSettingEntry'),
+            ['contract-env-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-env-meta.x', 'SCEnvMetaEntry'),
+            ['contract-meta']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-meta.x', 'SCMetaEntry'),
+            ['contract-spec']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-spec.x', 'SCSpecEntry'),
+            contract: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract.x', 'SCContractInstance'),
+            internal: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-internal.x', 'PersistedSCPState'),
+            ['ledger-entries']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger-entries.x', 'LedgerEntry'),
+            ledger: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x', 'LedgerCloseMeta'),
+            overlay: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x', 'AuthenticatedMessage'),
+            ['transaction-envelope']: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', 'TransactionEnvelope'),
+            types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x', 'HmacSha256Mac')
         }
 
         // console.log('line 104', JSON.stringify(stellar['transaction-envelope'].manifest).length, stellar['transaction-envelope'].manifest)
@@ -206,7 +203,7 @@
             </summary>
             <section id="factory">
                 <p>Load the type definition from an .X file to create a type class</p>
-                <code class="example">fileType = await XDR.factory('file.X')</code>
+                <code class="example">fileType = await XDR.factory('file.X', 'file')</code>
                 <pre class="result"></pre>
             </section>
             <section id="new-from-bytes">
@@ -268,83 +265,82 @@
                 using the Github file links as shown here, these Github links are only useful for learning and rapid
                 prototyping.
             </p>
+
             <section id="stellar-scp">
                 <h3>Stellar-SCP.x</h3>
                 <p>...</p>
                 <code
-                    class="example">stellarSCP = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x')</code>
+                    class="example">stellarSCP = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-SCP.x', 'SCPEnvelope')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-contract-config-setting">
                 <h3>Stellar-contract-config-setting.x</h3>
                 <p></p>
                 <code
-                    class="example">stellarContractConfigSettingType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-config-setting.x')</code>
+                    class="example">stellarContractConfigSettingType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-config-setting.x', 'ConfigSettingEntry')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-contract-env-meta">
                 <h3>Stellar-contract-env-meta.x</h3>
                 <p>...</p>
                 <code
-                    class="example">stellarContractEnvMetaType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-env-meta.x')</code>
+                    class="example">stellarContractEnvMetaType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-env-meta.x', 'SCEnvMetaEntry')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-contract-meta">
                 <h3>Stellar-contract-meta.x</h3>
                 <p>...</p>
                 <code
-                    class="example">stellarContractMetaType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-meta.x')</code>
+                    class="example">stellarContractMetaType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-meta.x', 'SCMetaEntry')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-contract-spec">
                 <h3>Stellar-contract-spec.x</h3>
                 <p>...</p>
                 <code
-                    class="example">stellarContractSpecType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-spec.x')</code>
+                    class="example">stellarContractSpecType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract-spec.x', 'SCSpecEntry')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-contract">
                 <h3>Stellar-contract.x</h3>
                 <p>...</p>
                 <code
-                    class="example">stellarContractType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract.x')</code>
+                    class="example">stellarContractType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-contract.x', 'SCContractInstance')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-internal">
                 <h3>Stellar-internal.x</h3>
                 <p>...</p>
                 <code
-                    class="example">stellarInternalType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-internal.x')</code>
+                    class="example">stellarInternalType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-internal.x', 'PersistedSCPState')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-ledger-entries">
                 <h3>Stellar-ledger-entries.x</h3>
                 <p></p>
                 <code
-                    class="example">stellarLedgerEntriesType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger-entries.x')</code>
+                    class="example">stellarLedgerEntriesType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger-entries.x', 'LedgerEntry')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-ledger">
                 <h3>Stellar-ledger.x</h3>
                 <p></p>
                 <code
-                    class="example">stellarLedgerType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x')</code>
+                    class="example">stellarLedgerType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-ledger.x', 'LedgerCloseMeta')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-overlay">
                 <h3>Stellar-overlay.x</h3>
                 <p></p>
                 <code
-                    class="example">stellarOverlayType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x')</code>
+                    class="example">stellarOverlayType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-overlay.x', 'AuthenticatedMessage')</code>
                 <pre class="result"></pre>
             </section>
             <section id="stellar-transaction-envelope">
                 <h3>Stellar-transaction.x</h3>
                 <p></p>
                 <code class="example">
-stellarTransactionEnvelopeType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', {
-    entry: 'TransactionEnvelope', name: 'TransactionEnvelope'
-})
+stellarTransactionEnvelopeType = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', 'TransactionEnvelope')
                 </code>
                 <pre class="result"></pre>
             </section>
@@ -353,7 +349,7 @@ stellarTransactionEnvelopeType = await XDR.factory('https://raw.githubuserconten
                 <p>Does not create a valid struct itself, but is included in other files. Shown here to demonstrate
                     correct parsing.</p>
                 <code
-                    class="example">stellarTypes = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x')</code>
+                    class="example">stellarTypes = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x', 'HmacSha256Mac')</code>
                 <pre class="result"></pre>
             </section>
         </details>
