@@ -604,7 +604,7 @@ function parseX(xCode, entry, name) {
     for (const [k, v] of Object.entries(unions)) if (enums[v.discriminant.type]) used.enums[v.discriminant.type] = [...enums[v.discriminant.type]]
 
     const typeClass = class extends BaseClass {
-        static manifest = { ...BaseClass.manifest, name, namespace, entry, ...used }
+        static manifest = { ...BaseClass.manifest, entry, name, namespace, ...used }
     }
     Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
     return typeClass
@@ -700,38 +700,32 @@ const XDR = {
         if (!typeCollection || (typeof typeCollection !== 'object')) throw new Error('typeCollection must be an object')
         if (typeof options !== 'object') throw new Error('options must be an object')
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
-        const libraryTypes = this.options.libraryKey ? types[this.options.libraryKey] : undefined
-        for (let [typeKey, type] of Object.entries(typeCollection)) {
-            const typeOptions = { ...(options[typeKey] ?? defaultOptions) }, entry = typeOptions?.entry ?? typeKey
+        const libraryTypes = this.options.libraryKey ? typeCollection[this.options.libraryKey] : undefined
+        for (const name in typeCollection) {
+            const manifest = typeCollection[name], typeOptions = { ...(options[name] ?? defaultOptions) }, entry = typeOptions?.entry ?? name
             delete typeOptions.entry
-            if (typeof type === 'string') type = await this.factory(type, entry, typeOptions)
-            if (!(type.prototype && (type.prototype instanceof TypeDef)) && type instanceof Object) {
-                if (libraryTypes) {
-                    for (const scope in libraryTypes) {
-                        const expandedScope = {}
-                        if (type[scope]) for (const t of type[scope]) expandedScope[t] = libraryTypes[scope][t]
-                        type[scope] = expandedScope
-                    }
-                }
-                const typeManifest = { ...type }
-                type = class extends BaseClass {
-                    static entry = entry ?? typeManifest.entry
-                    static manifest = {
-                        ...BaseClass.manifest, name: this.name, namespace: this.namespace, entry: this.entry,
-                        constants: typeManifest?.constants ?? {}, enums: typeManifest?.enums ?? {},
-                        structs: Object.fromEntries(Object.entries(typeManifest?.structs ?? {}).map(([k, v]) => [k, new Map(v)])),
-                        typedefs: typeManifest?.typedefs ?? {}, unions: typeManifest?.unions ?? {},
-                    }
-                    static name = typeOptions.name ?? typeManifest.name
-                    static namespace = typeOptions.namespace ?? typeManifest.namespace
-                }
-                Object.defineProperty(type.manifest, 'toJSON', { value: function () { return manifestToJson(type.manifest) } })
+            if (!manifest || !(manifest instanceof Object)) throw new Error(`typeCollection[${name}] is not an object`)
+            if (libraryTypes) for (const scope in libraryTypes) {
+                const expandedScope = {}
+                if (manifest[scope]) for (const t of manifest[scope]) expandedScope[t] = libraryTypes[scope][t]
+                manifest[scope] = expandedScope
             }
+            const name = typeOptions.name ?? manifest.name, namespace = typeOptions.namespace ?? manifest.namespace
+            const typeClass = class extends BaseClass {
+                static entry = entry ?? manifest.entry
+                static manifest = {
+                    ...BaseClass.manifest, entry, name, namespace,
+                    constants: manifest?.constants ?? {}, enums: manifest?.enums ?? {},
+                    structs: Object.fromEntries(Object.entries(manifest?.structs ?? {}).map(([k, v]) => [k, new Map(v)])),
+                    typedefs: manifest?.typedefs ?? {}, unions: manifest?.unions ?? {},
+                }
+            }
+            Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
             if (type.namespace) {
-                this.types[type.namespace] ||= {}
-                this.types[type.namespace][typeKey] = type
+                this.types[typeClass.namespace] ||= {}
+                this.types[typeClass.namespace][name] = typeClass
             } else {
-                this.types[typeKey] = type
+                this.types[name] = typeClass
             }
         }
     },
