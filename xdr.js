@@ -614,25 +614,14 @@ const XDR = {
     version: '1.1.2',
     createEnum,
     factory: async function (str, entry, options = {}) {
-        const namespace = options?.namespace
-        let includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? document.baseURI, isURL = !str.includes(';'), typeKey
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
-        if (entry && !options?.name) options.name = entry
-        if (isURL) str = new URL(str, document.baseURI).href
-        typeKey = options.name ?? (isURL ? str : Array.prototype.map.call(new Uint8Array(await crypto.subtle.digest('SHA-384', new TextEncoder('utf-8').encode(str))),
-            x => (('00' + x.toString(16)).slice(-2))).join(''))
-        if (!namespace && (typeKey in this.types)) return this.types[typeKey]
-        if (namespace) {
-            this.types[namespace] ||= {}
-            if (typeKey in this.types[namespace]) return this.types[namespace][typeKey]
-        }
-        if (isURL) {
-            baseUri = options?.baseURI ?? (new URL(str, baseUri).href)
-            str = await (await fetch(str)).text()
-        }
+        const namespace = options?.namespace, isURL = !str.includes(';'), name = options?.name ?? entry
+        if (!namespace && (name in this.types)) return this.types[name]
+        if (namespace && this.types[namespace] && (name in this.types[namespace])) return this.types[namespace][name]
+        if (isURL) str = await (await fetch(new URL(str, document.baseURI).href)).text()
         let includesMatches = Array.from(str.matchAll(rx.includes))
         if (includesMatches.length) {
-            const urlsFetched = {}
+            const urlsFetched = {}, includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? (isURL ? str : document.baseURI)
             while (includesMatches.length) {
                 for (const includeMatch of includesMatches) {
                     const includeURL = includes(includeMatch[0], baseUri)
@@ -643,14 +632,13 @@ const XDR = {
                 includesMatches = Array.from(str.matchAll(rx.includes))
             }
         }
-        const typeClass = parseX(str, entry, typeKey)
-        typeClass.manifest.entry = entry
-        if (namespace) typeClass.manifest.namespace = namespace
-        if (typeClass.namespace) {
-            this.types[typeClass.namespace] ||= {}
-            return this.types[typeClass.namespace][typeKey] = typeClass
+        const typeClass = parseX(str, entry, name)
+        if (namespace) {
+            typeClass.manifest.namespace = namespace
+            this.types[namespace] ||= {}
+            return this.types[namespace][name] = typeClass
         }
-        return this.types[typeKey] = typeClass
+        return this.types[name] = typeClass
     },
     export: async function (namespace, format = 'xdr', raw = false) {
         const source = namespace ? this.types[namespace] : this.types, typeManifests = {}
