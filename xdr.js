@@ -6,7 +6,6 @@ class TypeDef {
     static additionalArgs = []
     static isImplicitArray = false
     static minBytesLength = 0
-    static namespace
 
     static deserialize(bytes) { return }
     static getView(i, byteOffset, byteLength) {
@@ -375,6 +374,7 @@ const BaseClass = class extends TypeDef {
 
     static deserialize(bytes, instance, declaration, raw, isArrayItem) {
         const type = declaration?.type ?? this.manifest.entry
+        console.log('line 378', type)
         const runDeserialize = (b, bl, d, iai) => {
             const r = this.deserialize(b, undefined, d, true, iai)
             return [bl + r.bytes.byteLength, r.value, b.subarray(r.bytes.byteLength)]
@@ -456,7 +456,7 @@ const BaseClass = class extends TypeDef {
 
     consume(bytes) {
         const newBytes = bytes.slice(0), testValue = this.constructor.deserialize(newBytes, undefined, undefined, true)
-        if (this.value === undefined) this.value = testValue.value
+        this.value ??= testValue.value
         return bytes.subarray(0, testValue.bytes.byteLength)
     }
 
@@ -702,7 +702,7 @@ const XDR = {
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
         const libraryTypes = this.options.libraryKey ? typeCollection[this.options.libraryKey] : undefined
         for (const name in typeCollection) {
-            const manifest = typeCollection[name], typeOptions = { ...(options[name] ?? defaultOptions) }, entry = typeOptions?.entry ?? name
+            const manifest = { ...typeCollection[name] }, typeOptions = { ...(options[name] ?? defaultOptions) }, entry = typeOptions?.entry ?? name
             delete typeOptions.entry
             if (!manifest || !(manifest instanceof Object)) throw new Error(`typeCollection[${name}] is not an object`)
             if (libraryTypes) for (const scope in libraryTypes) {
@@ -712,7 +712,6 @@ const XDR = {
             }
             const name = typeOptions.name ?? manifest.name, namespace = typeOptions.namespace ?? manifest.namespace
             const typeClass = class extends BaseClass {
-                static entry = entry ?? manifest.entry
                 static manifest = {
                     ...BaseClass.manifest, entry, name, namespace,
                     constants: manifest?.constants ?? {}, enums: manifest?.enums ?? {},
@@ -721,9 +720,9 @@ const XDR = {
                 }
             }
             Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
-            if (type.namespace) {
-                this.types[typeClass.namespace] ||= {}
-                this.types[typeClass.namespace][name] = typeClass
+            if (namespace) {
+                this.types[namespace] ||= {}
+                this.types[namespace][name] = typeClass
             } else {
                 this.types[name] = typeClass
             }
