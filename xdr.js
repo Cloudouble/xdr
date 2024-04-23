@@ -17,7 +17,6 @@ class TypeDef {
     static serialize(value) { return new Uint8Array() }
 
     constructor(input, ...consumeArgs) {
-        console.log('line 20', this.constructor.name)
         if (input instanceof Uint8Array) {
             const consumeResult = this.#consume(input, ...consumeArgs), isConsumeResultArray = Array.isArray(consumeResult)
             this.#bytes = isConsumeResultArray ? consumeResult[0] : consumeResult
@@ -30,7 +29,6 @@ class TypeDef {
         Object.defineProperties(this, {
             bytes: {
                 get: function () {
-                    console.log('line 33')
                     return this.#bytes ??= this.constructor.serialize(this.#value, this)
                 }, enumerable: true
             },
@@ -294,7 +292,7 @@ Object.defineProperties(boolType.prototype, {
 
 const coreTypes = {
     bool: boolType, int: intType, hyper: hyperType, float: floatType, double: doubleType,
-    opaque: opaqueType, string: stringType, void: voidType
+    opaque: opaqueType, string: stringType, void: voidType, typedef: TypeDef
 }
 
 const manifestToJson = manifest => {
@@ -330,7 +328,6 @@ const BaseClass = class extends TypeDef {
             let r
             if (declaration.mode && declaration.length && Array.isArray(v)) {
                 let totalLength = 0
-                console.log('line 333')
                 const chunks = [[new intType(v.length).bytes, totalLength]]
                 totalLength += 4
                 for (const item of v) totalLength += chunks[chunks.push([cb(item), totalLength]) - 1][0].length
@@ -341,7 +338,6 @@ const BaseClass = class extends TypeDef {
             return cb(v)
         }
         if (type in XDR.coreTypes) {
-            console.log('line 344', type)
             result = (new XDR.coreTypes[type](value, ...XDR.coreTypes[type].additionalArgs.map(a => declaration[a]))).bytes
         } else if (type in this.manifest.typedefs) {
             switch (this.manifest.typedefs[type].type) {
@@ -357,7 +353,6 @@ const BaseClass = class extends TypeDef {
                 let itemTotalLength = 0
                 for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
                     if (identifierDeclaration.optional) {
-                        console.log('line 360')
                         const hasField = itemValue[identifier] !== undefined, hasFieldBool = new boolType(hasField)
                         itemChunks.push([hasFieldBool.bytes, itemTotalLength])
                         itemTotalLength += 4
@@ -374,7 +369,6 @@ const BaseClass = class extends TypeDef {
         } else if (type in this.manifest.unions) {
             const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
             const serializeUnionItem = itemValue => {
-                console.log('line 372')
                 const enumIdentifier = itemValue[unionManifest.discriminant.value], discriminantBytes = (new enumClass(enumIdentifier)).bytes,
                     armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier]),
                     itemResult = new Uint8Array(discriminantBytes.length + armBytes.length)
@@ -395,7 +389,6 @@ const BaseClass = class extends TypeDef {
         }
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         let result
-        console.log('line 393', XDR.types, XDR.coreTypes)
         if (type in XDR.coreTypes) {
             result = (new XDR.coreTypes[type](bytes, ...XDR.coreTypes[type].additionalArgs.map(a => declaration[a])))
         } else if (type in this.manifest.typedefs) {
@@ -411,7 +404,7 @@ const BaseClass = class extends TypeDef {
                     byteLength += 4
                     if (!hasField) continue
                 }
-                if (declarationLength && (!XDR.types[declarationType] || (XDR.types[declarationType] && !(XDR.types[declarationType].prototype instanceof TypeDef)))) {
+                if (declarationLength && !XDR.types._core[declarationType]) {
                     const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
                     if (declarationMode === 'variable') {
                         if (declarationVariableLength > declarationLength) throw new Error('variable length exceeds declaration length')
@@ -433,15 +426,12 @@ const BaseClass = class extends TypeDef {
             bytes = bytes.subarray(4)
             byteLength += 4
             try {
-                console.log('line 431')
                 discriminantInstance = new enumClass(enumValue)
             } catch (e) {
-                console.log('line 434')
                 discriminantInstance = new enumClass(0)
             }
             let armDeclaration = unionManifest.arms[discriminantInstance.identifier], armResult
             if (armDeclaration === undefined) {
-                console.log('line 439')
                 discriminantInstance = new enumClass(0)
                 armDeclaration = unionManifest.arms[discriminantInstance.identifier]
             }
@@ -621,17 +611,12 @@ function parseX(xCode, entry, name) {
     addUsedMembers(entry)
     for (const [k, v] of Object.entries(unions)) if (enums[v.discriminant.type]) used.enums[v.discriminant.type] = [...enums[v.discriminant.type]]
 
-    console.log('line 619', entry, name)
-
     const typeClass = class extends BaseClass {
         static entry = entry
         static name = name
         static namespace = namespace
         static manifest = { ...BaseClass.manifest, entry, name, namespace, ...used }
     }
-
-    console.log('line 628', typeClass.name)
-
     Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
     return typeClass
 }
@@ -641,13 +626,13 @@ const XDR = {
     createEnum,
     factory: async function (str, entry, options = {}) {
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
-        const namespace = options?.namespace, isURL = !str.includes(';'), name = options?.name ?? entry
-        if (!namespace && (name in this.types)) return this.types[name]
+        let namespace = options?.namespace, definitionURL = !str.includes(';') ? str : undefined, name = options?.name ?? entry
+        if (!namespace && (name in this.types._anon)) return this.types._anon[name]
         if (namespace && this.types[namespace] && (name in this.types[namespace])) return this.types[namespace][name]
-        if (isURL) str = await (await fetch(new URL(str, document.baseURI).href)).text()
+        if (definitionURL) str = await (await fetch(new URL(definitionURL, document.baseURI).href)).text()
         let includesMatches = Array.from(str.matchAll(rx.includes))
         if (includesMatches.length) {
-            const urlsFetched = {}, includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? (isURL ? str : document.baseURI)
+            const urlsFetched = {}, includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? definitionURL ?? document.baseURI
             while (includesMatches.length) {
                 for (const includeMatch of includesMatches) {
                     const includeURL = includes(includeMatch[0], baseUri)
@@ -659,15 +644,18 @@ const XDR = {
             }
         }
         const typeClass = parseX(str, entry, name)
+        typeClass.namespace ??= namespace
+        namespace ??= typeClass.namespace
         if (namespace) {
+            if (namespace !== typeClass.namespace) typeClass.namespace = namespace
             typeClass.manifest.namespace = namespace
             this.types[namespace] ||= {}
             return this.types[namespace][name] = typeClass
         }
-        return this.types[name] = typeClass
+        return this.types._anon[name] = typeClass
     },
     export: async function (namespace, format = 'xdr', raw = false) {
-        const source = namespace ? this.types[namespace] : this.types, typeManifests = {}
+        const source = namespace ? this.types[namespace] : this.types._anon, typeManifests = {}
         format = format === 'json' ? 'json' : 'xdr'
         for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) typeManifests[k] = JSON.parse(JSON.stringify(v.manifest))
         const typeCollection = { library: { enums: [], structs: [], typedefs: [], unions: [] }, types: [] }
@@ -707,13 +695,13 @@ const XDR = {
             typeCollection.types.push({ key: typeKey, manifest })
         }
 
-        console.log('line 705', JSON.stringify(typeCollection).length)
+        console.log('line 695', JSON.stringify(typeCollection).length)
 
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
 
         const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
 
-        console.log('line 711', TypeCollectionType.manifest)
+        console.log('line 701', TypeCollectionType.manifest)
 
         return typeCollection
     },
@@ -753,7 +741,7 @@ const XDR = {
                 this.types[namespace] ||= {}
                 this.types[namespace][name] = typeClass
             } else {
-                this.types[name] = typeClass
+                this.types._anon[name] = typeClass
             }
         }
     },
@@ -761,7 +749,6 @@ const XDR = {
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
         if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
         if (!arrayLength || typeDef.isImplicitArray) {
-            console.log('line 759')
             const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))
             return raw ? r : r.value
         }
@@ -773,7 +760,6 @@ const XDR = {
         }
         const result = new Array(arrayActualLength)
         for (const i of result.keys()) {
-            console.log('line 771')
             const r = new typeDef(bytes)
             result[i] = raw ? r : r.value
             bytes = bytes.subarray(r.bytes.byteLength)
@@ -782,9 +768,7 @@ const XDR = {
     },
     serialize: function (value, typeDef, arrayLength, arrayMode) {
         if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
-        console.log('line 780', typeDef.name, arrayLength, typeDef.isImplicitArray)
         if (!arrayLength || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))).bytes
-        console.log('line 782', typeDef.name)
         if (!Array.isArray(value)) throw new Error('value must be an array')
         if (arrayMode !== 'variable') arrayMode = 'fixed'
         const arrayActualLength = arrayMode === 'variable' ? value.length : arrayLength
@@ -792,7 +776,6 @@ const XDR = {
         let totalLength = 0
         const chunks = []
         if (arrayMode === 'variable') {
-            console.log('line 789')
             chunks.push([new intType(arrayActualLength).bytes, totalLength])
             totalLength += 4
         }
@@ -808,9 +791,11 @@ const XDR = {
     },
     stringify: function (value, typedef, arrayLength, arrayMode) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, arrayLength, arrayMode))) },
     coreTypes,
-    types: { typedef: TypeDef, _base: BaseClass, ...coreTypes },
+    types: { ...coreTypes, _anon: {}, _base: { TypeDef, BaseClass }, _core: coreTypes },
     options: {
-        includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
+        includes: (match, baseUri) => {
+            return new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href
+        },
         libraryKey: '__library__'
     }
 }

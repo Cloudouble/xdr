@@ -43,13 +43,8 @@
 
             fileType = await XDR.factory('file.x', 'file')
 
-        console.log('line 46', fileType.manifest, XDR.types)
-
         // create an instance of the type from a Uint8Array of byte integers 
         const fileInstanceFromBytes = new fileType(fileBytes)
-
-        console.log('demo.html: line 51: ', fileInstanceFromBytes)
-
 
         // create an instance of the type from a live object that conforms to the type definition
         const fileInstanceFromValue = new fileType(fileValue)
@@ -98,18 +93,18 @@
             types: await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-types.x', 'HmacSha256Mac')
         }
 
-        // console.log('line 104', JSON.stringify(stellar['transaction-envelope'].manifest).length, stellar['transaction-envelope'].manifest)
+        // console.log('line 96', JSON.stringify(stellar['transaction-envelope'].manifest).length, stellar['transaction-envelope'].manifest)
 
 
         const show = (v) => JSON.stringify(Array.from(v))
 
-        const instance1 = Array.isArray(entry) ? new XDR.types[entry[0]](bytes, ...entry.slice(1)) : new XDR.types.stellar[entry](bytes)
+        const instance1 = Array.isArray(entry) ? new XDR.types._core[entry[0]](bytes, ...entry.slice(1)) : new XDR.types.stellar[entry](bytes)
         console.log(entry, 'instance1: ', instance1)
 
-        const instance2 = Array.isArray(entry) ? new XDR.types[entry[0]](instance1.value, ...entry.slice(1)) : new XDR.types.stellar[entry](instance1.value)
+        const instance2 = Array.isArray(entry) ? new XDR.types._core[entry[0]](instance1.value, ...entry.slice(1)) : new XDR.types.stellar[entry](instance1.value)
         console.log(entry, 'instance2: ', instance2)
 
-        const instance3 = Array.isArray(entry) ? new XDR.types[entry[0]](instance2.bytes, ...entry.slice(1)) : new XDR.types.stellar[entry](instance2.bytes)
+        const instance3 = Array.isArray(entry) ? new XDR.types._core[entry[0]](instance2.bytes, ...entry.slice(1)) : new XDR.types.stellar[entry](instance2.bytes)
         console.log(entry, 'instance3: ', instance3)
 
 
@@ -119,13 +114,13 @@
 
         try {
             const instance1JSON = JSON.parse(JSON.stringify(instance1.value))
-            const instance4 = Array.isArray(entry) ? new XDR.types[entry[0]](instance1JSON, ...entry.slice(1)) : new XDR.types.stellar[entry](instance1JSON)
+            const instance4 = Array.isArray(entry) ? new XDR.types._core[entry[0]](instance1JSON, ...entry.slice(1)) : new XDR.types.stellar[entry](instance1JSON)
             console.log(entry, 'instance4: ', instance4)
             console.log('%s %s %c%s', entry, 'instances 1 & 4 same bytes: ', 'color: green;', show(instance1.bytes) === show(instance4.bytes))
         } catch (e) { }
 
-        const value5 = XDR.deserialize(bytes, Array.isArray(entry) ? XDR.types[entry[0]] : XDR.types.stellar[entry], ...(Array.isArray(entry) ? entry.slice(1) : [null, null]), null, 'test')
-        const bytes5 = XDR.serialize(value5, Array.isArray(entry) ? XDR.types[entry[0]] : XDR.types.stellar[entry], ...(Array.isArray(entry) ? entry.slice(1) : [null, null]), 'test')
+        const value5 = XDR.deserialize(bytes, Array.isArray(entry) ? XDR.types._core[entry[0]] : XDR.types.stellar[entry], ...(Array.isArray(entry) ? entry.slice(1) : [null, null]), null, 'test')
+        const bytes5 = XDR.serialize(value5, Array.isArray(entry) ? XDR.types._core[entry[0]] : XDR.types.stellar[entry], ...(Array.isArray(entry) ? entry.slice(1) : [null, null]), 'test')
 
         console.log(entry, 'value5: ', value5)
         console.log(entry, 'bytes5: ', bytes5)
@@ -139,8 +134,8 @@
         const examples = {
             'file-value': JSON.stringify(fileValue, null, 4),
             'file-bytes': JSON.stringify(Array.from(fileBytes), null, 4),
-            'file-type': await fetch('file.X').then(r => r.text()),
-            'factory': `fileType = ${fileType.toString()}\n\n\n${XDR.types.typedef.toString()}`,
+            'file-type': await fetch('file.x').then(r => r.text()),
+            'factory': `fileType = ${fileType.toString()}\n\n\n${XDR.types._core.typedef.toString()}`,
             'new-from-bytes': `fileInstanceFromBytes = ${JSON.stringify({
                 ...{ value: fileInstanceFromBytes.value, bytes: Array.from(fileInstanceFromBytes.bytes) }, constructor: { ...fileInstanceFromBytes.constructor }
             }, null, 4)}`,
@@ -193,7 +188,7 @@
             </section>
             <section id="file-type">
                 <p>A string of XDR type definition language contained in an .X file</p>
-                <code class="example">file.X</code>
+                <code class="example">file.x</code>
                 <pre class="result"></pre>
             </section>
         </details>
@@ -203,7 +198,7 @@
             </summary>
             <section id="factory">
                 <p>Load the type definition from an .X file to create a type class</p>
-                <code class="example">fileType = await XDR.factory('file.X', 'file')</code>
+                <code class="example">fileType = await XDR.factory('file.x', 'file')</code>
                 <pre class="result"></pre>
             </section>
             <section id="new-from-bytes">
