@@ -49,7 +49,7 @@ class TypeDef {
 
 }
 
-class intType extends TypeDef {
+class int extends TypeDef {
 
     static additionalArgs = ['unsigned']
     static minBytesLength = 4
@@ -69,7 +69,7 @@ class intType extends TypeDef {
 
 }
 
-class hyperType extends intType {
+class hyper extends int {
 
     static minBytesLength = 8
 
@@ -85,7 +85,7 @@ class hyperType extends intType {
 
 }
 
-class floatType extends TypeDef {
+class float extends TypeDef {
 
     static minBytesLength = 4
 
@@ -99,7 +99,7 @@ class floatType extends TypeDef {
 
 }
 
-class doubleType extends floatType {
+class double extends float {
 
     static minBytesLength = 8
 
@@ -112,7 +112,7 @@ class doubleType extends floatType {
 
 }
 
-class opaqueType extends TypeDef {
+class opaque extends TypeDef {
 
     static additionalArgs = ['length', 'mode']
     static isImplicitArray = true
@@ -167,7 +167,7 @@ class opaqueType extends TypeDef {
 
 }
 
-class stringType extends TypeDef {
+class string extends TypeDef {
 
     #maxLength
 
@@ -256,7 +256,7 @@ function createEnum(body, name) {
     if (body && (!Array.isArray(body) || !body.length ||
         !(body.every(i => (i == null || typeof i === 'string')) || body.every(i => (i == null || typeof i === 'boolean')))))
         throw new Error(`enum must have a body array of string or boolean identifiers: body: ${JSON.stringify(body)}, name: ${name}`)
-    return class extends intType {
+    return class extends int {
 
         static name = name
 
@@ -284,16 +284,11 @@ function createEnum(body, name) {
     }
 }
 
-const boolType = createEnum([false, true], 'boolType')
-Object.defineProperties(boolType.prototype, {
+const bool = createEnum([false, true], 'bool')
+Object.defineProperties(bool.prototype, {
     valueOf: { value: function () { return !!this.value } },
     toJSON: { value: function () { return !!this.value } }
 })
-
-const coreTypes = {
-    bool: boolType, int: intType, hyper: hyperType, float: floatType, double: doubleType,
-    opaque: opaqueType, string: stringType, void: voidType, typedef: TypeDef
-}
 
 const manifestToJson = manifest => {
     const retval = {}
@@ -328,7 +323,7 @@ const BaseClass = class extends TypeDef {
             let r
             if (declaration.mode && declaration.length && Array.isArray(v)) {
                 let totalLength = 0
-                const chunks = [[new intType(v.length).bytes, totalLength]]
+                const chunks = [[new int(v.length).bytes, totalLength]]
                 totalLength += 4
                 for (const item of v) totalLength += chunks[chunks.push([cb(item), totalLength]) - 1][0].length
                 r = new Uint8Array(totalLength)
@@ -337,8 +332,8 @@ const BaseClass = class extends TypeDef {
             }
             return cb(v)
         }
-        if (type in XDR.coreTypes) {
-            result = (new XDR.coreTypes[type](value, ...XDR.coreTypes[type].additionalArgs.map(a => declaration[a]))).bytes
+        if (type in XDR.types._core) {
+            result = (new XDR.types._core[type](value, ...XDR.types._core[type].additionalArgs.map(a => declaration[a]))).bytes
         } else if (type in this.manifest.typedefs) {
             switch (this.manifest.typedefs[type].type) {
                 case 'opaque':
@@ -353,7 +348,7 @@ const BaseClass = class extends TypeDef {
                 let itemTotalLength = 0
                 for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
                     if (identifierDeclaration.optional) {
-                        const hasField = itemValue[identifier] !== undefined, hasFieldBool = new boolType(hasField)
+                        const hasField = itemValue[identifier] !== undefined, hasFieldBool = new bool(hasField)
                         itemChunks.push([hasFieldBool.bytes, itemTotalLength])
                         itemTotalLength += 4
                         if (!hasField) continue
@@ -389,8 +384,8 @@ const BaseClass = class extends TypeDef {
         }
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         let result
-        if (type in XDR.coreTypes) {
-            result = (new XDR.coreTypes[type](bytes, ...XDR.coreTypes[type].additionalArgs.map(a => declaration[a])))
+        if (type in XDR.types._core) {
+            result = (new XDR.types._core[type](bytes, ...XDR.types._core[type].additionalArgs.map(a => declaration[a])))
         } else if (type in this.manifest.typedefs) {
             result = this.deserialize(bytes, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
         } else if (type in this.manifest.structs) {
@@ -442,7 +437,7 @@ const BaseClass = class extends TypeDef {
                 delete armDeclaration.mode
             }
             const { length: armLength, mode: armMode, type: armType, identifier } = armDeclaration
-            if (armLength && !(armType in XDR.types)) {
+            if (armLength && !(armType in !XDR.types._core)) {
                 const armVariableLength = armMode === 'variable' ? this.getView(bytes).getUint32(0, false) : armLength
                 if (armMode === 'variable') {
                     bytes = bytes.subarray(4)
@@ -776,7 +771,7 @@ const XDR = {
         let totalLength = 0
         const chunks = []
         if (arrayMode === 'variable') {
-            chunks.push([new intType(arrayActualLength).bytes, totalLength])
+            chunks.push([new int(arrayActualLength).bytes, totalLength])
             totalLength += 4
         }
         for (const item of value) totalLength += chunks[chunks.push([this.serialize(item, typeDef), totalLength]) - 1][0].length
@@ -790,8 +785,7 @@ const XDR = {
         return this.deserialize(bytes, typedef, arrayLength, arrayMode, raw)
     },
     stringify: function (value, typedef, arrayLength, arrayMode) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, arrayLength, arrayMode))) },
-    coreTypes,
-    types: { ...coreTypes, _anon: {}, _base: { TypeDef, BaseClass }, _core: coreTypes },
+    types: { _anon: {}, _base: { TypeDef, BaseClass }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
     options: {
         includes: (match, baseUri) => {
             return new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href
