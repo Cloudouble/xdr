@@ -43,7 +43,7 @@
 
             fileType = await XDR.factory('file.x', 'file')
 
-        console.log('line 46', fileType.manifest)
+        console.log('line 46', fileType.manifest, XDR.types)
 
         // create an instance of the type from a Uint8Array of byte integers 
         const fileInstanceFromBytes = new fileType(fileBytes)
