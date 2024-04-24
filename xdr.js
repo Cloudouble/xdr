@@ -272,16 +272,18 @@ const rx = {
                     continue
                 }
                 retval[key] = JSON.parse(JSON.stringify(manifest[key]))
+                break
             default:
                 retval[key] = manifest[key]
         }
     }
     return retval
 }, parseX = function (xCode, entry, name) {
-    if (!xCode || (typeof xCode !== 'string')) throw new Error('No xCode defined')
+    if (!xCode || (typeof xCode !== 'string')) throw new Error('No valid xCode defined')
+    xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
+    if (!xCode) throw new Error('No xCode supplied')
     if (!entry) throw new Error('No entry defined')
     name ??= entry
-    xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
     let namespace = (xCode.match(rx.namespace) ?? [])[1]
     for (const m of xCode.matchAll(rx.const)) {
@@ -323,24 +325,23 @@ const rx = {
         const unionName = m?.groups?.name ?? m?.groups?.nameTypeDef, unionBody = m?.groups?.body ?? m?.groups?.bodyTypeDef,
             discriminantDeclaration = m?.groups?.discriminant ?? m?.groups?.discriminantTypeDef, arms = {}, queuedArms = [],
             [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim()),
-            discriminant = { type: discriminantType, value: discriminantValue }
+            discriminant = { type: discriminantType, value: discriminantValue }, processArm = (c, cb, mm, dv) => {
+                const [n, map] = cb(mm)
+                c[n] = map
+                arms[dv] = { type: n }
+            }
         for (let caseSpec of unionBody.split('case ')) {
             caseSpec = caseSpec.trim()
             if (!caseSpec) continue
             let [discriminantValue, armDeclaration] = caseSpec.split(':').map(s => s.trim())
-            if (!armDeclaration) { queuedArms.push(discriminantValue); continue }
             if (armDeclaration[armDeclaration.length - 1] === ';') armDeclaration = armDeclaration.slice(0, -1).trim()
-            const processArm = (c, cb) => {
-                const [n, map] = cb(mm)
-                c[n] = map
-                arms[discriminantValue] = { type: n }
-            }
+            if (!armDeclaration) { queuedArms.push(discriminantValue); continue }
             switch (armDeclaration.split(rx.space)[0]) {
                 case 'struct':
-                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.struct)) processArm(structs, buildStructFromMatch)
+                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.struct)) processArm(structs, buildStructFromMatch, mm, discriminantValue)
                     break
                 case 'union':
-                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.union)) processArm(unions, buildUnionFromMatch)
+                    for (const mm of `typedef ${armDeclaration};`.matchAll(rx.union)) processArm(unions, buildUnionFromMatch, mm, discriminantValue)
                     break
                 default:
                     arms[discriminantValue] = parseTypeLengthModeIdentifier(armDeclaration, constants)
@@ -350,21 +351,20 @@ const rx = {
         }
         return [unionName, discriminant, arms]
     }
-    let anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)),
-        anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
-    while (anonymousFlatStructMatches.length || anonymousFlatUnionMatches.length) {
-        for (const m of anonymousFlatStructMatches) {
-            const [identifier, map] = buildStructFromMatch(m), structName = `aStruct${crypto.randomUUID().replace(rx.dashes, '')}`
-            structs[structName] = map
-            xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
-        }
-        for (const m of anonymousFlatUnionMatches) {
+    let aStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)), aUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
+    while (aStructMatches.length || aUnionMatches.length) {
+        for (const m of aUnionMatches) {
             const [identifier, discriminant, arms] = buildUnionFromMatch(m), unionName = `aUnion${crypto.randomUUID().replace(rx.dashes, '')}`
             unions[unionName] = { discriminant, arms }
             xCode = xCode.replace(m[0], `\n${unionName} ${identifier};\n`).replace(rx.blankLines, '').trim()
         }
-        anonymousFlatStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat))
-        anonymousFlatUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
+        for (const m of aStructMatches) {
+            const [identifier, map] = buildStructFromMatch(m), structName = `aStruct${crypto.randomUUID().replace(rx.dashes, '')}`
+            structs[structName] = map
+            xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
+        }
+        aUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
+        aStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat))
     }
     for (const m of xCode.matchAll(rx.union)) {
         const [unionName, discriminant, arms] = buildUnionFromMatch(m)
@@ -376,7 +376,6 @@ const rx = {
         structs[structName] = map
         xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
     }
-
     const all = { structs, unions, typedefs }, used = { structs: {}, unions: {}, typedefs: {}, enums: {} }, allUsed = new Set(),
         addUsedMembers = typeName => {
             if (allUsed.has(typeName)) return
@@ -392,7 +391,6 @@ const rx = {
         }
     addUsedMembers(entry)
     for (const [k, v] of Object.entries(unions)) if (enums[v.discriminant.type]) used.enums[v.discriminant.type] = [...enums[v.discriminant.type]]
-
     const typeClass = class extends BaseClass {
         static entry = entry
         static name = name
