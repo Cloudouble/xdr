@@ -407,22 +407,20 @@ Object.defineProperties(bool.prototype, {
 
 const BaseClass = class extends TypeDef {
 
-    static manifest = {}
     static entry
     static name
     static namespace
-
+    static manifest = {}
     static serialize(value, instance, declaration) {
         let type = declaration?.type ?? this.manifest.entry, result
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         const runSerialize = (v, cb) => {
-            let r
             if (declaration.mode && declaration.length && Array.isArray(v)) {
                 let totalLength = 0
                 const chunks = [[new int(v.length).bytes, totalLength]]
                 totalLength += 4
                 for (const item of v) totalLength += chunks[chunks.push([cb(item), totalLength]) - 1][0].length
-                r = new Uint8Array(totalLength)
+                let r = new Uint8Array(totalLength)
                 for (const chunk of chunks) r.set(...chunk)
                 return r
             }
@@ -431,21 +429,16 @@ const BaseClass = class extends TypeDef {
         if (type in XDR.types._core) {
             result = (new XDR.types._core[type](value, ...XDR.types._core[type].additionalArgs.map(a => declaration[a]))).bytes
         } else if (type in this.manifest.typedefs) {
-            switch (this.manifest.typedefs[type].type) {
-                case 'opaque':
-                    result = this.serialize(value, undefined, { ...this.manifest.typedefs[type] })
-                    break
-                default:
-                    result = runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], mode: undefined, length: undefined }))
-            }
+            result = this.manifest.typedefs[type].type === 'opaque' ? this.serialize(value, undefined, { ...this.manifest.typedefs[type] })
+                : runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], mode: undefined, length: undefined }))
         } else if (type in this.manifest.structs) {
-            const serializeStructItem = itemValue => {
+            result = runSerialize(value, itemValue => {
                 const itemChunks = []
                 let itemTotalLength = 0
                 for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
                     if (identifierDeclaration.optional) {
-                        const hasField = itemValue[identifier] !== undefined, hasFieldBool = new bool(hasField)
-                        itemChunks.push([hasFieldBool.bytes, itemTotalLength])
+                        const hasField = itemValue[identifier] !== undefined ? 1 : 0
+                        itemChunks.push([new Uint8Array([0, 0, 0, hasField]), itemTotalLength])
                         itemTotalLength += 4
                         if (!hasField) continue
                         identifierDeclaration = { ...identifierDeclaration, optional: undefined }
@@ -455,19 +448,17 @@ const BaseClass = class extends TypeDef {
                 const itemResult = new Uint8Array(itemTotalLength)
                 for (const chunk of itemChunks) itemResult.set(...chunk)
                 return itemResult
-            }
-            result = runSerialize(value, serializeStructItem)
+            })
         } else if (type in this.manifest.unions) {
             const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
-            const serializeUnionItem = itemValue => {
+            result = runSerialize(value, itemValue => {
                 const enumIdentifier = itemValue[unionManifest.discriminant.value], discriminantBytes = (new enumClass(enumIdentifier)).bytes,
                     armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier]),
                     itemResult = new Uint8Array(discriminantBytes.length + armBytes.length)
                 itemResult.set(discriminantBytes, 0)
                 itemResult.set(armBytes, discriminantBytes.length)
                 return itemResult
-            }
-            result = runSerialize(value, serializeUnionItem)
+            })
         }
         return result
     }
