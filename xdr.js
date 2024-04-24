@@ -6,7 +6,6 @@ class TypeDef {
     static additionalArgs = []
     static isImplicitArray = false
     static minBytesLength = 0
-
     static deserialize(bytes) { return }
     static getView(i, byteOffset, byteLength) {
         if (typeof i === 'number') return new DataView(new ArrayBuffer(i))
@@ -27,12 +26,8 @@ class TypeDef {
             throw new Error(`Invalid input for ${this.constructor.name}: ${input}`)
         }
         Object.defineProperties(this, {
-            bytes: {
-                get: function () {
-                    return this.#bytes ??= this.constructor.serialize(this.#value, this)
-                }, enumerable: true
-            },
-            value: { get: function () { return this.#value ??= this.constructor.deserialize(this.#bytes, this) }, enumerable: true }
+            bytes: { get: () => this.#bytes ??= this.constructor.serialize(this.#value, this), enumerable: true },
+            value: { get: () => this.#value ??= this.constructor.deserialize(this.#bytes, this), enumerable: true }
         })
     }
 
