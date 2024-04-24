@@ -571,36 +571,126 @@ Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { retur
 
 const XDR = {
     version: '1.1.9',
-    createEnum,
-    factory: async function (str, entry, options = {}) {
-        if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
-        const definitionURL = !str.includes(';') ? str : undefined, name = options?.name ?? entry
+    types: { _anon: {}, _base: { TypeDef, BaseClass }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
+    options: {
+        includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
+        libraryKey: '__library__', cacheExpiry: 10000
+    },
+    deserialize: function (bytes, typeDef, arrayLength, arrayMode, raw) {
+        if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
+        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
+        if (!arrayLength || typeDef.isImplicitArray) {
+            const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))
+            return raw ? r : r.value
+        }
+        if (arrayMode !== 'variable') arrayMode = 'fixed'
+        const arrayActualLength = arrayMode === 'variable' ? typeDef.getView(bytes).getUint32(0, false) : arrayLength
+        if (arrayMode === 'variable') {
+            if (arrayActualLength > arrayLength) throw new Error('Variable length array exceeds max array length')
+            bytes = bytes.subarray(4)
+        }
+        const result = new Array(arrayActualLength)
+        for (const i of result.keys()) {
+            const r = new typeDef(bytes)
+            result[i] = raw ? r : r.value
+            bytes = bytes.subarray(r.bytes.byteLength)
+        }
+        return result
+    },
+    serialize: function (value, typeDef, arrayLength, arrayMode) {
+        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
+        if (!arrayLength || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))).bytes
+        if (!Array.isArray(value)) throw new Error('value must be an array')
+        if (arrayMode !== 'variable') arrayMode = 'fixed'
+        const arrayActualLength = arrayMode === 'variable' ? value.length : arrayLength, chunks = []
+        if (value.length != arrayActualLength) throw new Error('value length must match array length')
+        let totalLength = 0
+        if (arrayMode === 'variable') {
+            chunks.push([new int(arrayActualLength).bytes, totalLength])
+            totalLength += 4
+        }
+        for (const item of value) totalLength += chunks[chunks.push([this.serialize(item, typeDef), totalLength]) - 1][0].length
+        let result = new Uint8Array(totalLength)
+        for (const chunk of chunks) result.set(...chunk)
+        return result
+    },
+    parse: function (str, typedef, arrayLength, arrayMode, raw) {
+        const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
+        return this.deserialize(bytes, typedef, arrayLength, arrayMode, raw)
+    },
+    stringify: function (value, typedef, arrayLength, arrayMode) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, arrayLength, arrayMode))) },
+
+    import: async function (typeCollection = {}, options = {}, defaultOptions = {}, format = 'xdr') {
+        format = format === 'json' ? 'json' : 'xdr'
+        if (typeof typeCollection === 'string') {
+            typeCollection = await fetch((new URL(typeCollection, import.meta.url)).href).then(r => r.text())
+            typeCollection = format === 'json' ? JSON.parse(typeCollection) : this.parse(typeCollection, manifestType)
+        }
+        if (!typeCollection || (typeof typeCollection !== 'object')) throw new Error('typeCollection must be an object')
+        if (typeof options !== 'object') throw new Error('options must be an object')
+        if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
+        const libraryTypes = this.options.libraryKey ? typeCollection[this.options.libraryKey] : undefined
+        for (const name in typeCollection) {
+            const manifest = { ...typeCollection[name] }, typeOptions = { ...(options[name] ?? defaultOptions) }, entry = typeOptions?.entry ?? name
+            delete typeOptions.entry
+            if (!manifest || !(manifest instanceof Object)) throw new Error(`typeCollection[${name}] must be an object`)
+            if (libraryTypes) for (const scope in libraryTypes) {
+                const expandedScope = {}
+                if (manifest[scope]) for (const t of manifest[scope]) expandedScope[t] = libraryTypes[scope][t]
+                manifest[scope] = expandedScope
+            }
+            const name = typeOptions.name ?? manifest.name, namespace = typeOptions.namespace ?? manifest.namespace
+            const typeClass = class extends BaseClass {
+                static entry = entry
+                static name = name
+                static namespace = namespace
+                static manifest = {
+                    ...BaseClass.manifest, entry, name, namespace,
+                    constants: manifest?.constants ?? {}, enums: manifest?.enums ?? {},
+                    structs: Object.fromEntries(Object.entries(manifest?.structs ?? {}).map(([k, v]) => [k, new Map(v)])),
+                    typedefs: manifest?.typedefs ?? {}, unions: manifest?.unions ?? {},
+                }
+            }
+            Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
+            if (namespace) {
+                this.types[namespace] ||= {}
+                this.types[namespace][name] = typeClass
+            } else {
+                this.types._anon[name] = typeClass
+            }
+        }
+    },
+
+    factory: async function (xCode, entry, options = {}) {
+        if (typeof xCode !== 'string') throw new Error('Factory requires an xCode string, either a URL to a .X file or .X file type definition as a string')
+        const definitionURL = !xCode.includes(';') ? xCode : undefined, name = options?.name ?? entry
         let namespace = options?.namespace
         if (!namespace && (name in this.types._anon)) return this.types._anon[name]
         if (namespace && this.types[namespace] && (name in this.types[namespace])) return this.types[namespace][name]
-        if (definitionURL) str = await (await fetch(new URL(definitionURL, document.baseURI).href)).text()
-        let includesMatches = Array.from(str.matchAll(rx.includes))
+        if (definitionURL) xCode = await (await fetch(new URL(definitionURL, document.baseURI).href)).text()
+        let includesMatches = Array.from(xCode.matchAll(rx.includes))
         if (includesMatches.length) {
             const urlsFetched = {}, includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? definitionURL ?? document.baseURI
             while (includesMatches.length) {
                 for (const includeMatch of includesMatches) {
                     const includeURL = includes(includeMatch[0], baseUri)
                     if (urlsFetched[includeURL]) {
-                        str = str.replace(includeMatch[0], `\n\n`)
+                        xCode = xCode.replace(includeMatch[0], `\n\n`)
                     } else {
                         if (!(includeURL in this._cache)) {
                             this._cache[includeURL] = (await (await fetch(includeURL)).text())
                             if (this.options.cacheExpiry) setTimeout(() => delete this._cache[includeURL], this.options.cacheExpiry)
                         }
-                        str = str.replace(includeMatch[0], `\n\n${this._cache[includeURL]} \n\n`)
+                        xCode = xCode.replace(includeMatch[0], `\n\n${this._cache[includeURL]} \n\n`)
                         if (!this.options.cacheExpiry) delete this._cache[includeURL]
                     }
                     urlsFetched[includeURL] = true
                 }
-                includesMatches = Array.from(str.matchAll(rx.includes))
+                includesMatches = Array.from(xCode.matchAll(rx.includes))
             }
         }
-        const typeClass = parseX(str, entry, name)
+        const typeClass = parseX(xCode, entry, name)
         typeClass.namespace ??= namespace
         namespace ??= typeClass.namespace
         if (namespace) {
@@ -661,97 +751,9 @@ const XDR = {
         console.log('line 701', TypeCollectionType.manifest)
 
         return typeCollection
-    },
-    import: async function (typeCollection = {}, options = {}, defaultOptions = {}, format = 'xdr') {
-        format = format === 'json' ? 'json' : 'xdr'
-        if (typeof typeCollection === 'string') {
-            typeCollection = await fetch((new URL(typeCollection, import.meta.url)).href).then(r => r.text())
-            typeCollection = format === 'json' ? JSON.parse(typeCollection) : this.parse(typeCollection, manifestType)
-        }
-        if (!typeCollection || (typeof typeCollection !== 'object')) throw new Error('typeCollection must be an object')
-        if (typeof options !== 'object') throw new Error('options must be an object')
-        if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
-        const libraryTypes = this.options.libraryKey ? typeCollection[this.options.libraryKey] : undefined
-        for (const name in typeCollection) {
-            const manifest = { ...typeCollection[name] }, typeOptions = { ...(options[name] ?? defaultOptions) }, entry = typeOptions?.entry ?? name
-            delete typeOptions.entry
-            if (!manifest || !(manifest instanceof Object)) throw new Error(`typeCollection[${name}] must be an object`)
-            if (libraryTypes) for (const scope in libraryTypes) {
-                const expandedScope = {}
-                if (manifest[scope]) for (const t of manifest[scope]) expandedScope[t] = libraryTypes[scope][t]
-                manifest[scope] = expandedScope
-            }
-            const name = typeOptions.name ?? manifest.name, namespace = typeOptions.namespace ?? manifest.namespace
-            const typeClass = class extends BaseClass {
-                static entry = entry
-                static name = name
-                static namespace = namespace
-                static manifest = {
-                    ...BaseClass.manifest, entry, name, namespace,
-                    constants: manifest?.constants ?? {}, enums: manifest?.enums ?? {},
-                    structs: Object.fromEntries(Object.entries(manifest?.structs ?? {}).map(([k, v]) => [k, new Map(v)])),
-                    typedefs: manifest?.typedefs ?? {}, unions: manifest?.unions ?? {},
-                }
-            }
-            Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
-            if (namespace) {
-                this.types[namespace] ||= {}
-                this.types[namespace][name] = typeClass
-            } else {
-                this.types._anon[name] = typeClass
-            }
-        }
-    },
-    deserialize: function (bytes, typeDef, arrayLength, arrayMode, raw) {
-        if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
-        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
-        if (!arrayLength || typeDef.isImplicitArray) {
-            const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))
-            return raw ? r : r.value
-        }
-        if (arrayMode !== 'variable') arrayMode = 'fixed'
-        const arrayActualLength = arrayMode === 'variable' ? typeDef.getView(bytes).getUint32(0, false) : arrayLength
-        if (arrayMode === 'variable') {
-            if (arrayActualLength > arrayLength) throw new Error('Variable length array exceeds max array length')
-            bytes = bytes.subarray(4)
-        }
-        const result = new Array(arrayActualLength)
-        for (const i of result.keys()) {
-            const r = new typeDef(bytes)
-            result[i] = raw ? r : r.value
-            bytes = bytes.subarray(r.bytes.byteLength)
-        }
-        return result
-    },
-    serialize: function (value, typeDef, arrayLength, arrayMode) {
-        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
-        if (!arrayLength || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))).bytes
-        if (!Array.isArray(value)) throw new Error('value must be an array')
-        if (arrayMode !== 'variable') arrayMode = 'fixed'
-        const arrayActualLength = arrayMode === 'variable' ? value.length : arrayLength, chunks = []
-        if (value.length != arrayActualLength) throw new Error('value length must match array length')
-        let totalLength = 0
-        if (arrayMode === 'variable') {
-            chunks.push([new int(arrayActualLength).bytes, totalLength])
-            totalLength += 4
-        }
-        for (const item of value) totalLength += chunks[chunks.push([this.serialize(item, typeDef), totalLength]) - 1][0].length
-        let result = new Uint8Array(totalLength)
-        for (const chunk of chunks) result.set(...chunk)
-        return result
-    },
-    parse: function (str, typedef, arrayLength, arrayMode, raw) {
-        const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
-        return this.deserialize(bytes, typedef, arrayLength, arrayMode, raw)
-    },
-    stringify: function (value, typedef, arrayLength, arrayMode) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, arrayLength, arrayMode))) },
-    types: { _anon: {}, _base: { TypeDef, BaseClass }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
-    options: {
-        includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
-        libraryKey: '__library__', cacheExpiry: 10000
     }
+
 }
-Object.defineProperties(XDR, { _cache: { value: {} } })
+Object.defineProperties(XDR, { createEnum: { value: createEnum }, _cache: { value: {} } })
 
 export default XDR
