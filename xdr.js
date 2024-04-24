@@ -572,7 +572,6 @@ Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { retur
 const XDR = {
     version: '1.1.9',
     createEnum,
-    includesCache: {},
     factory: async function (str, entry, options = {}) {
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
         const definitionURL = !str.includes(';') ? str : undefined, name = options?.name ?? entry
@@ -582,19 +581,19 @@ const XDR = {
         if (definitionURL) str = await (await fetch(new URL(definitionURL, document.baseURI).href)).text()
         let includesMatches = Array.from(str.matchAll(rx.includes))
         if (includesMatches.length) {
-            const now = Date.now(), urlsFetched = {}, includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? definitionURL ?? document.baseURI
+            const urlsFetched = {}, includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? definitionURL ?? document.baseURI
             while (includesMatches.length) {
                 for (const includeMatch of includesMatches) {
                     const includeURL = includes(includeMatch[0], baseUri)
                     if (urlsFetched[includeURL]) {
                         str = str.replace(includeMatch[0], `\n\n`)
                     } else {
-                        if (!(includeURL in this.includesCache)) {
-                            this.includesCache[includeURL] = (await (await fetch(includeURL)).text())
-                            if (this.options.cacheExpiry) setTimeout(() => delete this.includesCache[includeURL], this.options.cacheExpiry)
+                        if (!(includeURL in this._cache)) {
+                            this._cache[includeURL] = (await (await fetch(includeURL)).text())
+                            if (this.options.cacheExpiry) setTimeout(() => delete this._cache[includeURL], this.options.cacheExpiry)
                         }
-                        str = str.replace(includeMatch[0], `\n\n${this.includesCache[includeURL]} \n\n`)
-                        if (!this.options.cacheExpiry) delete this.includesCache[includeURL]
+                        str = str.replace(includeMatch[0], `\n\n${this._cache[includeURL]} \n\n`)
+                        if (!this.options.cacheExpiry) delete this._cache[includeURL]
                     }
                     urlsFetched[includeURL] = true
                 }
@@ -754,5 +753,8 @@ const XDR = {
         libraryKey: '__library__', cacheExpiry: 10000
     }
 }
+Object.defineProperties(XDR, {
+    _cache: { value: {} }
+})
 
 export default XDR
