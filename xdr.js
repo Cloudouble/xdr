@@ -742,13 +742,13 @@ const XDR = {
             typeCollection.types.push({ key: typeKey, manifest })
         }
 
-        console.log('line 695', JSON.stringify(typeCollection).length)
+        console.log('line 745', JSON.stringify(typeCollection).length)
 
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
 
         const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
 
-        console.log('line 701', TypeCollectionType.manifest)
+        console.log('line 751', TypeCollectionType.manifest)
 
         return typeCollection
     }
