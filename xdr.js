@@ -284,7 +284,7 @@ const rx = {
     if (!xCode) throw new Error('No xCode supplied')
     if (!entry) throw new Error('No entry defined')
     name ??= entry
-    const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}, cleanXCode = (s, r = '') => xCode.replace(s, '').replace(rx.blankLines, '').trim()
+    const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}, cleanXCode = (s, r = '') => xCode.replace(s, r).replace(rx.blankLines, '').trim()
     let namespace = (xCode.match(rx.namespace) ?? [])[1]
     for (const m of xCode.matchAll(rx.const)) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
@@ -353,18 +353,18 @@ const rx = {
     }
     let aStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat)), aUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
     while (aStructMatches.length || aUnionMatches.length) {
-        for (const m of aUnionMatches) {
-            const [identifier, discriminant, arms] = buildUnionFromMatch(m), unionName = `aUnion${crypto.randomUUID().replace(rx.dashes, '')}`
-            unions[unionName] = { discriminant, arms }
-            xCode = cleanXCode(m[0], `\n${unionName} ${identifier};\n`)
-        }
         for (const m of aStructMatches) {
             const [identifier, map] = buildStructFromMatch(m), structName = `aStruct${crypto.randomUUID().replace(rx.dashes, '')}`
             structs[structName] = map
             xCode = cleanXCode(m[0], `\n${structName} ${identifier};\n`)
         }
-        aUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
+        for (const m of aUnionMatches) {
+            const [identifier, discriminant, arms] = buildUnionFromMatch(m), unionName = `aUnion${crypto.randomUUID().replace(rx.dashes, '')}`
+            unions[unionName] = { discriminant, arms }
+            xCode = cleanXCode(m[0], `\n${unionName} ${identifier};\n`)
+        }
         aStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat))
+        aUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
     }
     for (const m of xCode.matchAll(rx.union)) {
         const [unionName, discriminant, arms] = buildUnionFromMatch(m)
