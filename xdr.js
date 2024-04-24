@@ -284,16 +284,16 @@ const rx = {
     if (!xCode) throw new Error('No xCode supplied')
     if (!entry) throw new Error('No entry defined')
     name ??= entry
-    const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
+    const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}, cleanXCode = (s, r = '') => xCode.replace(s, '').replace(rx.blankLines, '').trim()
     let namespace = (xCode.match(rx.namespace) ?? [])[1]
     for (const m of xCode.matchAll(rx.const)) {
         constants[m[1]] = parseInt(m[2], m[2][0] === '0' && m[2][1] !== '.' && m[2][1] !== 'x' ? 8 : undefined)
-        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
+        xCode = cleanXCode(m[0])
     }
     for (const t of xCode.matchAll(rx.typedef)) {
         const typeObj = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
         typedefs[typeObj.identifier] = typeObj
-        xCode = xCode.replace(t[0], '').replace(rx.blankLines, '').trim()
+        xCode = cleanXCode(t[0])
     }
     for (const m of xCode.matchAll(rx.enum)) {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', enumName = isTypeDef ? m[4] : m[1], enumBody = isTypeDef ? m[3] : m[2], body = []
@@ -308,7 +308,7 @@ const rx = {
             body[value] = conditionName
         }
         enums[enumName] = body
-        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
+        xCode = cleanXCode(m[0])
     }
     const buildStructFromMatch = function (m) {
         const structName = m?.groups?.name ?? m?.groups?.nameTypeDef, structBody = m?.groups?.body ?? m?.groups?.bodyTypeDef, map = new Map()
@@ -356,12 +356,12 @@ const rx = {
         for (const m of aUnionMatches) {
             const [identifier, discriminant, arms] = buildUnionFromMatch(m), unionName = `aUnion${crypto.randomUUID().replace(rx.dashes, '')}`
             unions[unionName] = { discriminant, arms }
-            xCode = xCode.replace(m[0], `\n${unionName} ${identifier};\n`).replace(rx.blankLines, '').trim()
+            xCode = cleanXCode(m[0], `\n${unionName} ${identifier};\n`)
         }
         for (const m of aStructMatches) {
             const [identifier, map] = buildStructFromMatch(m), structName = `aStruct${crypto.randomUUID().replace(rx.dashes, '')}`
             structs[structName] = map
-            xCode = xCode.replace(m[0], `\n${structName} ${identifier};\n`).replace(rx.blankLines, '').trim()
+            xCode = cleanXCode(m[0], `\n${structName} ${identifier};\n`)
         }
         aUnionMatches = Array.from(xCode.matchAll(rx.unionAnonymousFlat))
         aStructMatches = Array.from(xCode.matchAll(rx.structAnonymousFlat))
@@ -369,12 +369,12 @@ const rx = {
     for (const m of xCode.matchAll(rx.union)) {
         const [unionName, discriminant, arms] = buildUnionFromMatch(m)
         unions[unionName] = { discriminant, arms }
-        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
+        xCode = cleanXCode(m[0])
     }
     for (const m of xCode.matchAll(rx.struct)) {
         const [structName, map] = buildStructFromMatch(m)
         structs[structName] = map
-        xCode = xCode.replace(m[0], '').replace(rx.blankLines, '').trim()
+        xCode = cleanXCode(m[0])
     }
     const all = { structs, unions, typedefs }, used = { structs: {}, unions: {}, typedefs: {}, enums: {} }, allUsed = new Set(),
         addUsedMembers = typeName => {
