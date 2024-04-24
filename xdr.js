@@ -570,22 +570,32 @@ const BaseClass = class extends TypeDef {
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
 const XDR = {
-    version: '1.2.0',
+    version: '1.1.9',
     createEnum,
+    includesCache: {},
     factory: async function (str, entry, options = {}) {
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
-        let namespace = options?.namespace, definitionURL = !str.includes(';') ? str : undefined, name = options?.name ?? entry
+        const definitionURL = !str.includes(';') ? str : undefined, name = options?.name ?? entry
+        let namespace = options?.namespace
         if (!namespace && (name in this.types._anon)) return this.types._anon[name]
         if (namespace && this.types[namespace] && (name in this.types[namespace])) return this.types[namespace][name]
         if (definitionURL) str = await (await fetch(new URL(definitionURL, document.baseURI).href)).text()
         let includesMatches = Array.from(str.matchAll(rx.includes))
         if (includesMatches.length) {
-            const urlsFetched = {}, includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? definitionURL ?? document.baseURI
+            const now = Date.now(), urlsFetched = {}, includes = options?.includes ?? this.options.includes, baseUri = options?.baseURI ?? definitionURL ?? document.baseURI
             while (includesMatches.length) {
                 for (const includeMatch of includesMatches) {
                     const includeURL = includes(includeMatch[0], baseUri)
-                    str = urlsFetched[includeURL] ? str.replace(includeMatch[0], `\n\n`) : str.replace(includeMatch[0], `\n\n${await (await fetch(includeURL)).text()
-                        } \n\n`)
+                    if (urlsFetched[includeURL]) {
+                        str = str.replace(includeMatch[0], `\n\n`)
+                    } else {
+                        if (!(includeURL in this.includesCache)) {
+                            this.includesCache[includeURL] = (await (await fetch(includeURL)).text())
+                            if (this.options.cacheExpiry) setTimeout(() => delete this.includesCache[includeURL], this.options.cacheExpiry)
+                        }
+                        str = str.replace(includeMatch[0], `\n\n${this.includesCache[includeURL]} \n\n`)
+                        if (!this.options.cacheExpiry) delete this.includesCache[includeURL]
+                    }
                     urlsFetched[includeURL] = true
                 }
                 includesMatches = Array.from(str.matchAll(rx.includes))
@@ -741,7 +751,7 @@ const XDR = {
     types: { _anon: {}, _base: { TypeDef, BaseClass }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
     options: {
         includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
-        libraryKey: '__library__'
+        libraryKey: '__library__', cacheExpiry: 10000
     }
 }
 
