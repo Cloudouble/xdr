@@ -48,7 +48,6 @@ class int extends TypeDef {
 
     static additionalArgs = ['unsigned']
     static minBytesLength = 4
-
     static deserialize(bytes) { return this.getView(bytes)[this.unsigned ? 'getUint32' : 'getInt32'](0, false) }
     static isValueInput(input) { return Number.isInteger(input) }
     static serialize(value) {
@@ -67,7 +66,6 @@ class int extends TypeDef {
 class hyper extends int {
 
     static minBytesLength = 8
-
     static deserialize(bytes) { return this.getView(bytes)[this.unsigned ? 'getBigUint64' : 'getBigInt64'](0, false) }
     static isValueInput(input) { return typeof input === 'bigint' }
     static serialize(value) {
@@ -83,7 +81,6 @@ class hyper extends int {
 class float extends TypeDef {
 
     static minBytesLength = 4
-
     static deserialize(bytes) { return this.getView(bytes).getFloat32(0, false) }
     static isValueInput(input) { return typeof input === 'number' }
     static serialize(value) {
@@ -97,7 +94,6 @@ class float extends TypeDef {
 class double extends float {
 
     static minBytesLength = 8
-
     static deserialize(bytes) { return this.getView(bytes).getFloat64(0, false) }
     static serialize(value) {
         const view = this.getView(8)
@@ -111,16 +107,11 @@ class opaque extends TypeDef {
 
     static additionalArgs = ['length', 'mode']
     static isImplicitArray = true
-
     static deserialize(bytes, instance) {
-        switch (instance.mode) {
-            case 'fixed':
-                return Array.from(bytes)
-            case 'variable':
-                const maxOffset = this.getView(bytes).getUint32(0, false) + 4, data = []
-                for (let offset = 4; offset < maxOffset; offset++) data.push(bytes[offset])
-                return data
-        }
+        if (instance.mode === 'fixed') return Array.from(bytes)
+        const maxOffset = this.getView(bytes).getUint32(0, false) + 4, data = []
+        for (let offset = 4; offset < maxOffset; offset++) data.push(bytes[offset])
+        return data
     }
     static isValueInput(input) { return Array.isArray(input) }
     static serialize(value, instance, length, mode) {
@@ -141,7 +132,7 @@ class opaque extends TypeDef {
         if (mode !== 'variable') mode = 'fixed'
         const inputIsArray = Array.isArray(input)
         super(input, length, mode, inputIsArray)
-        if (mode === 'fixed' && inputIsArray && input.length !== length) throw new Error(`Fixed value length mismatch for ${this.constructor.name}: ${input.length}!= ${length}`)
+        if (mode === 'fixed' && inputIsArray && (input.length !== length)) throw new Error(`Fixed value length mismatch for ${this.constructor.name}: ${input.length}!= ${length}`)
         Object.defineProperties(this, {
             length: { value: length, enumerable: true },
             mode: { value: mode, enumerable: true }
@@ -167,7 +158,6 @@ class string extends TypeDef {
     #maxLength
 
     static additionalArgs = ['length']
-
     static deserialize(bytes) {
         const maxOffset = this.getView(bytes).getUint32(0, false) + 4, chars = [], decoder = new TextDecoder()
         for (let offset = 4; offset < maxOffset; offset++) chars.push(decoder.decode(bytes.subarray(offset, offset + 1)))
@@ -175,8 +165,7 @@ class string extends TypeDef {
     }
     static isValueInput(input) { return typeof input === 'string' }
     static serialize(value) {
-        const stringBytes = (new TextEncoder()).encode(value), view = this.getView(4),
-            bytes = new Uint8Array(4 + (Math.ceil(stringBytes.length / 4) * 4))
+        const stringBytes = (new TextEncoder()).encode(value), view = this.getView(4), bytes = new Uint8Array(4 + (Math.ceil(stringBytes.length / 4) * 4))
         view.setUint32(0, stringBytes.length, false)
         bytes.set(new Uint8Array(view.buffer))
         bytes.set(stringBytes, 4)
@@ -189,9 +178,8 @@ class string extends TypeDef {
     }
 
     consume(bytes, maxLength) {
-        const stringLength = this.constructor.getView(bytes).getUint32(0, false)
+        const stringLength = this.constructor.getView(bytes).getUint32(0, false), consumeLength = Math.ceil(stringLength / 4) * 4
         if (maxLength && (stringLength > maxLength)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${stringLength}`)
-        let consumeLength = Math.ceil(stringLength / 4) * 4
         if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
         return bytes.subarray(0, 4 + consumeLength)
     }
@@ -246,7 +234,7 @@ const rx = {
     body ||= 0
     if (body && (!Array.isArray(body) || !body.length ||
         !(body.every(i => (i == null || typeof i === 'string')) || body.every(i => (i == null || typeof i === 'boolean')))))
-        throw new Error(`enum must have a body array of string or boolean identifiers: body: ${JSON.stringify(body)}, name: ${name}`)
+        throw new Error(`Enum must have a body array of string or boolean identifiers: body: ${JSON.stringify(body)}, name: ${name}`)
     return class extends int {
 
         static name = name
@@ -265,34 +253,33 @@ const rx = {
             super(input, true)
             this.#body = body
             this.#identifier = this.#body ? this.#body[this.value] : input
-            if (this.#body && (this.#identifier === undefined)) throw new Error(`no enum identifier found for ${typeof originalInput} ${originalInput}`)
+            if (this.#body && (this.#identifier === undefined)) throw new Error(`No enum identifier found for ${typeof originalInput} ${originalInput}`)
         }
 
         get identifier() { return this.#identifier }
-
         get body() { return this.#body }
 
     }
 }, manifestToJson = manifest => {
     const retval = {}
-    for (const manifestKey in manifest) {
-        switch (typeof manifest[manifestKey]) {
+    for (const key in manifest) {
+        switch (typeof manifest[key]) {
             case 'undefined': case 'function': continue
             case 'object':
-                if (manifestKey === 'structs') {
+                if (key === 'structs') {
                     retval.structs = {}
                     for (const structName in manifest.structs) retval.structs[structName] = JSON.parse(JSON.stringify(Array.from(manifest.structs[structName].entries())))
                     continue
                 }
-                retval[manifestKey] = JSON.parse(JSON.stringify(manifest[manifestKey]))
+                retval[key] = JSON.parse(JSON.stringify(manifest[key]))
             default:
-                retval[manifestKey] = manifest[manifestKey]
+                retval[key] = manifest[key]
         }
     }
     return retval
 }, parseX = function (xCode, entry, name) {
-    if (!entry) throw new Error('no entry defined')
-    if (!xCode || (typeof xCode !== 'string')) return
+    if (!xCode || (typeof xCode !== 'string')) throw new Error('No xCode defined')
+    if (!entry) throw new Error('No entry defined')
     name ??= entry
     xCode = xCode.replace(rx.comments, '').replace(rx.blankLines, '').trim()
     const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}
@@ -310,11 +297,11 @@ const rx = {
         const isTypeDef = m[0].slice(0, 8) === 'typedef ', enumName = isTypeDef ? m[4] : m[1], enumBody = isTypeDef ? m[3] : m[2], body = []
         for (const condition of enumBody.split(',')) {
             let [conditionName, value] = condition.split('=').map(s => s.trim())
-            if (!conditionName || !value) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
+            if (!conditionName || !value) throw new Error(`Enum ${enumName} has invalid condition: ${condition}`)
             let intValue = parseInt(value, value[0] === '0' && value[1] !== '.' && value[1] !== 'x' ? 8 : undefined)
             if (!Number.isInteger(intValue) && (value in constants)) intValue = constants[value]
             if (!Number.isInteger(intValue)) for (const en in enums) if (enums[en].indexOf(value) > -1) { intValue = enums[en].indexOf(value); break }
-            if (!Number.isInteger(intValue)) throw new Error(`enum ${enumName} has invalid condition: ${condition}`)
+            if (!Number.isInteger(intValue)) throw new Error(`Enum ${enumName} has invalid condition: ${condition}`)
             value = intValue
             body[value] = conditionName
         }
@@ -328,7 +315,7 @@ const rx = {
             if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
             if ((!declaration) || (declaration[0] === ';')) continue
             const { type, length, mode, identifier, optional, unsigned } = parseTypeLengthModeIdentifier(declaration, constants)
-            if (!type || !identifier) throw new Error(`struct ${structName} has invalid declaration: ${declaration};`)
+            if (!type || !identifier) throw new Error(`Struct ${structName} has invalid declaration: ${declaration};`)
             map.set(identifier, { type, length, mode, optional, unsigned })
         }
         return [structName, map]
@@ -513,7 +500,7 @@ const BaseClass = class extends TypeDef {
                 if (declarationLength && !XDR.types._core[declarationType]) {
                     const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
                     if (declarationMode === 'variable') {
-                        if (declarationVariableLength > declarationLength) throw new Error('variable length exceeds declaration length')
+                        if (declarationVariableLength > declarationLength) throw new Error('Variable length exceeds declaration length')
                         bytes = bytes.subarray(4)
                         byteLength += 4
                     }
@@ -553,7 +540,7 @@ const BaseClass = class extends TypeDef {
                 if (armMode === 'variable') {
                     bytes = bytes.subarray(4)
                     byteLength += 4
-                    if (armVariableLength > armLength) throw new Error('variable length exceeds arm declaration length')
+                    if (armVariableLength > armLength) throw new Error('Variable length exceeds arm declaration length')
                 }
                 armResult = new Array(armVariableLength)
                 for (const i of armResult.keys()) [byteLength, armResult[i], bytes] = runDeserialize(bytes, byteLength, { ...armDeclaration, length: undefined, mode: undefined }, true)
@@ -698,7 +685,7 @@ const XDR = {
         for (const name in typeCollection) {
             const manifest = { ...typeCollection[name] }, typeOptions = { ...(options[name] ?? defaultOptions) }, entry = typeOptions?.entry ?? name
             delete typeOptions.entry
-            if (!manifest || !(manifest instanceof Object)) throw new Error(`typeCollection[${name}] is not an object`)
+            if (!manifest || !(manifest instanceof Object)) throw new Error(`typeCollection[${name}] must be an object`)
             if (libraryTypes) for (const scope in libraryTypes) {
                 const expandedScope = {}
                 if (manifest[scope]) for (const t of manifest[scope]) expandedScope[t] = libraryTypes[scope][t]
@@ -735,7 +722,7 @@ const XDR = {
         if (arrayMode !== 'variable') arrayMode = 'fixed'
         const arrayActualLength = arrayMode === 'variable' ? typeDef.getView(bytes).getUint32(0, false) : arrayLength
         if (arrayMode === 'variable') {
-            if (arrayActualLength > arrayLength) throw new Error('variable length array exceeds max array length')
+            if (arrayActualLength > arrayLength) throw new Error('Variable length array exceeds max array length')
             bytes = bytes.subarray(4)
         }
         const result = new Array(arrayActualLength)
