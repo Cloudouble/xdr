@@ -728,10 +728,9 @@ const XDR = {
         if (!arrayLength || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))).bytes
         if (!Array.isArray(value)) throw new Error('value must be an array')
         if (arrayMode !== 'variable') arrayMode = 'fixed'
-        const arrayActualLength = arrayMode === 'variable' ? value.length : arrayLength
+        const arrayActualLength = arrayMode === 'variable' ? value.length : arrayLength, chunks = []
         if (value.length != arrayActualLength) throw new Error('value length must match array length')
         let totalLength = 0
-        const chunks = []
         if (arrayMode === 'variable') {
             chunks.push([new int(arrayActualLength).bytes, totalLength])
             totalLength += 4
@@ -753,8 +752,6 @@ const XDR = {
         libraryKey: '__library__', cacheExpiry: 10000
     }
 }
-Object.defineProperties(XDR, {
-    _cache: { value: {} }
-})
+Object.defineProperties(XDR, { _cache: { value: {} } })
 
 export default XDR
