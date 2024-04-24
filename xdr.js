@@ -507,23 +507,15 @@ const BaseClass = class extends TypeDef {
                 unionManifest.discriminant.type), enumValue = this.getView(bytes).getUint32(0, false)
             bytes = bytes.subarray(4)
             byteLength += 4
-            try {
-                discriminantInstance = new enumClass(enumValue)
-            } catch (e) {
-                discriminantInstance = new enumClass(0)
-            }
+            try { discriminantInstance = new enumClass(enumValue) } catch (e) { discriminantInstance = new enumClass(0) }
             let armDeclaration = unionManifest.arms[discriminantInstance.identifier], armResult
             if (armDeclaration === undefined) {
                 discriminantInstance = new enumClass(0)
                 armDeclaration = unionManifest.arms[discriminantInstance.identifier]
             }
-            const value = { [unionManifest.discriminant.value]: discriminantInstance.identifier }
-            if (isArrayItem) {
-                armDeclaration = { ...armDeclaration }
-                delete armDeclaration.length
-                delete armDeclaration.mode
-            }
-            const { length: armLength, mode: armMode, type: armType, identifier } = armDeclaration
+            if (isArrayItem) armDeclaration = { ...armDeclaration, length: undefined, mode: undefined }
+            const value = { [unionManifest.discriminant.value]: discriminantInstance.identifier },
+                { length: armLength, mode: armMode, type: armType, identifier } = armDeclaration
             if (armLength && !(armType in !XDR.types._core)) {
                 const armVariableLength = armMode === 'variable' ? this.getView(bytes).getUint32(0, false) : armLength
                 if (armMode === 'variable') {
@@ -578,7 +570,7 @@ const BaseClass = class extends TypeDef {
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
 const XDR = {
-    version: '1.1.2',
+    version: '1.2.0',
     createEnum,
     factory: async function (str, entry, options = {}) {
         if (typeof str !== 'string') throw new Error('Factory requires a string, either a URL to a .X file or .X file type definition as a string')
