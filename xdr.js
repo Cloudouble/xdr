@@ -656,6 +656,9 @@ const XDR = {
                     for (const [k, v] of entries) addUsedMembers(v.type)
                 }
             addUsedMembers(entry)
+
+            // not just unions use enums!!!
+
             for (const [k, v] of Object.entries(unions)) if (enums[v.discriminant.type]) used.enums[v.discriminant.type] = [...enums[v.discriminant.type]]
             const typeClass = class extends BaseClass {
                 static entry = entry
@@ -702,8 +705,8 @@ const XDR = {
         }
         return this.types._anon[name] = typeClass
     },
-    export: async function (namespace, format = 'xdr', raw = false) {
-        const source = namespace ? this.types[namespace] : this.types._anon, typeManifests = {}
+    export: async function (namespace = '_anon', format = 'xdr', raw = false) {
+        const source = this.types[namespace] ?? this.types._anon, typeManifests = {}
         format = format === 'json' ? 'json' : 'xdr'
         for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) typeManifests[k] = JSON.parse(JSON.stringify(v.manifest))
         const typeCollection = { library: { enums: [], structs: [], typedefs: [], unions: [] }, types: [] }
@@ -740,18 +743,18 @@ const XDR = {
                 typeCollection.library.unions.push({ key, discriminant, arms })
             }
             for (const scope in typeCollection.library) manifest[scope] = Object.keys(manifest[scope])
-            typeCollection.types.push({ key: typeKey, manifest })
+            typeCollection.types.push({ key: name, manifest })
         }
 
-        console.log('line 745', JSON.stringify(typeCollection).length)
+        console.log('line 746', JSON.stringify(typeCollection).length)
 
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
 
         const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
 
-        console.log('line 751', TypeCollectionType.manifest)
+        console.log('line 752', TypeCollectionType.manifest)
 
-        return typeCollection
+        return TypeCollectionType
     }
 
 }
