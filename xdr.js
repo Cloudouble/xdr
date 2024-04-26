@@ -642,23 +642,28 @@ const XDR = {
                 structs[structName] = map
                 xCode = cleanXCode(m[0])
             }
-            const all = { structs, unions, typedefs }, used = { structs: {}, unions: {}, typedefs: {}, enums: {} }, allUsed = new Set(),
+            const all = { structs, unions, typedefs, enums }, used = { structs: {}, unions: {}, typedefs: {}, enums: {} }, allUsed = new Set(),
                 addUsedMembers = typeName => {
                     if (allUsed.has(typeName)) return
                     const [typeIsMemberOf, entries] = typeName in unions
                         ? ['unions', Object.entries(unions[typeName].arms)] : (typeName in structs
                             ? ['structs', structs[typeName].entries()] : (typeName in typedefs
-                                ? ['typedefs', [[0, typedefs[typeName]]]] : [undefined, undefined]))
+                                ? ['typedefs', [[0, typedefs[typeName]]]] : (typeName in enums ? ['enums', []] : [undefined, undefined])))
                     if (!typeIsMemberOf) return
-                    used[typeIsMemberOf][typeName] = all[typeIsMemberOf][typeName] instanceof Map
-                        ? new Map(all[typeIsMemberOf][typeName].entries()) : { ...(all[typeIsMemberOf][typeName]) }
+                    switch (typeIsMemberOf) {
+                        case 'structs':
+                            used[typeIsMemberOf][typeName] = new Map(all[typeIsMemberOf][typeName].entries())
+                            break
+                        case 'enums':
+                            used[typeIsMemberOf][typeName] = [...(all[typeIsMemberOf][typeName])]
+                            break
+                        default:
+                            used[typeIsMemberOf][typeName] = { ...(all[typeIsMemberOf][typeName]) }
+                    }
                     allUsed.add(typeName);
                     for (const [k, v] of entries) addUsedMembers(v.type)
                 }
             addUsedMembers(entry)
-
-            // not just unions use enums!!!
-
             for (const [k, v] of Object.entries(unions)) if (enums[v.discriminant.type]) used.enums[v.discriminant.type] = [...enums[v.discriminant.type]]
             const typeClass = class extends BaseClass {
                 static entry = entry

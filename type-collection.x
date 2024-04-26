@@ -6,10 +6,10 @@ enum LengthMode {
 };
 
 struct Parameters {
-    unsigned int *length;
-    LengthMode *mode;
-    bool *optional;
-    bool *unsigned;
+    unsigned int length;
+    LengthMode mode;
+    bool optional;
+    bool unsigned;
 };
 
 struct TypeParameters {
