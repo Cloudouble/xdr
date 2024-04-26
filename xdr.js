@@ -292,21 +292,21 @@ const BaseClass = class extends TypeDef {
             result = this.manifest.typedefs[type].type === 'opaque' ? this.serialize(value, undefined, { ...this.manifest.typedefs[type] })
                 : runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], mode: undefined, length: undefined }))
         } else if (type in this.manifest.enums) {
-            result = runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.enums[type], mode: undefined, length: undefined }))
+            result = (new (createEnum(this.manifest.enums[type], type))(value)).bytes
         } else if (type in this.manifest.structs) {
             result = runSerialize(value, itemValue => {
                 const itemChunks = []
                 let itemTotalLength = 0
                 for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-                    console.log('line 305', identifier, identifierDeclaration)
+                    const hasField = itemValue[identifier] !== undefined ? 1 : 0
                     if (identifierDeclaration.optional) {
-                        const hasField = itemValue[identifier] !== undefined ? 1 : 0
                         itemChunks.push([new Uint8Array([0, 0, 0, hasField]), itemTotalLength])
                         itemTotalLength += 4
                         if (!hasField) continue
                         identifierDeclaration = { ...identifierDeclaration, optional: undefined }
+                    } else {
+                        if (!hasField) throw new Error(`Missing required field in ${type}: ${identifier}`)
                     }
-                    console.log('line 313', identifier, itemValue[identifier], this.serialize(itemValue[identifier], undefined, identifierDeclaration))
                     itemTotalLength += itemChunks[itemChunks.push([this.serialize(itemValue[identifier], undefined, identifierDeclaration), itemTotalLength]) - 1][0].length
                 }
                 const itemResult = new Uint8Array(itemTotalLength)
