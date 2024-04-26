@@ -767,22 +767,22 @@ const XDR = {
         // console.log('line 762', this.serialize(typeCollection, TypeCollectionType))
 
 
-        // const parameters = { length: 10, mode: 'variable', optional: false, unsigned: false }
-        // const ParametersType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'Parameters')
-        // const parametersInstance = new ParametersType(parameters)
+        const parameters = { length: 10, mode: 'variable', optional: false, unsigned: false }
+        const ParametersType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'Parameters')
+        const parametersInstance = new ParametersType(parameters)
 
-        // console.log('line 768', parameters)
-        // console.log('line 769', parametersInstance)
-        // console.log('line 770', this.serialize(parameters, ParametersType))
+        console.log('line 768', parameters)
+        console.log('line 769', parametersInstance)
+        console.log('line 770', this.serialize(parameters, ParametersType))
 
 
-        const lengthMode = 'variable'
-        const LengthModeType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'LengthMode')
-        const lengthModeInstance = new LengthModeType(lengthMode)
+        // const lengthMode = 'variable'
+        // const LengthModeType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'LengthMode')
+        // const lengthModeInstance = new LengthModeType(lengthMode)
 
-        console.log('line 777', lengthMode)
-        console.log('line 778', lengthModeInstance)
-        console.log('line 779', this.serialize(lengthMode, LengthModeType))
+        // console.log('line 777', lengthMode)
+        // console.log('line 778', lengthModeInstance)
+        // console.log('line 779', this.serialize(lengthMode, LengthModeType))
 
 
 
