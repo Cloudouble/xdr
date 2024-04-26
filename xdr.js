@@ -291,11 +291,14 @@ const BaseClass = class extends TypeDef {
         } else if (type in this.manifest.typedefs) {
             result = this.manifest.typedefs[type].type === 'opaque' ? this.serialize(value, undefined, { ...this.manifest.typedefs[type] })
                 : runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], mode: undefined, length: undefined }))
+        } else if (type in this.manifest.enums) {
+            result = runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.enums[type], mode: undefined, length: undefined }))
         } else if (type in this.manifest.structs) {
             result = runSerialize(value, itemValue => {
                 const itemChunks = []
                 let itemTotalLength = 0
                 for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
+                    console.log('line 305', identifier, identifierDeclaration)
                     if (identifierDeclaration.optional) {
                         const hasField = itemValue[identifier] !== undefined ? 1 : 0
                         itemChunks.push([new Uint8Array([0, 0, 0, hasField]), itemTotalLength])
@@ -303,6 +306,7 @@ const BaseClass = class extends TypeDef {
                         if (!hasField) continue
                         identifierDeclaration = { ...identifierDeclaration, optional: undefined }
                     }
+                    console.log('line 313', identifier, itemValue[identifier], this.serialize(itemValue[identifier], undefined, identifierDeclaration))
                     itemTotalLength += itemChunks[itemChunks.push([this.serialize(itemValue[identifier], undefined, identifierDeclaration), itemTotalLength]) - 1][0].length
                 }
                 const itemResult = new Uint8Array(itemTotalLength)
@@ -760,8 +764,8 @@ const XDR = {
 
         const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
 
-        console.log('line 757:  TypeCollectionType.manifest: ', TypeCollectionType.manifest)
-        console.log('line 758: typeCollection: ', typeCollection)
+        // console.log('line 757:  TypeCollectionType.manifest: ', TypeCollectionType.manifest)
+        // console.log('line 758: typeCollection: ', typeCollection)
 
         // const typeCollectionInstance = new TypeCollectionType(typeCollection)
         // console.log('line 762', this.serialize(typeCollection, TypeCollectionType))
@@ -771,18 +775,18 @@ const XDR = {
         const ParametersType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'Parameters')
         const parametersInstance = new ParametersType(parameters)
 
-        console.log('line 768', parameters)
-        console.log('line 769', parametersInstance)
-        console.log('line 770', this.serialize(parameters, ParametersType))
+        console.log('line 774', parameters)
+        console.log('line 775', parametersInstance)
+        console.log('line 776', parametersInstance.bytes)
 
 
-        // const lengthMode = 'variable'
+        // const lengthMode = 1
         // const LengthModeType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'LengthMode')
         // const lengthModeInstance = new LengthModeType(lengthMode)
 
-        // console.log('line 777', lengthMode)
-        // console.log('line 778', lengthModeInstance)
-        // console.log('line 779', this.serialize(lengthMode, LengthModeType))
+        // console.log('line 783', lengthMode)
+        // console.log('line 784', lengthModeInstance)
+        // console.log('line 785', this.serialize(lengthMode, LengthModeType))
 
 
 
