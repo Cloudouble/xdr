@@ -750,14 +750,11 @@ const XDR = {
             for (const scope in typeCollection.library) manifest[scope] = Object.keys(manifest[scope])
             typeCollection.types.push({ key: name, manifest })
         }
-
-        console.log('line 746', JSON.stringify(typeCollection).length)
-
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
 
         const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
 
-        console.log('line 752', TypeCollectionType.manifest)
+        console.log('line 757', TypeCollectionType.manifest)
 
         return TypeCollectionType
     }
