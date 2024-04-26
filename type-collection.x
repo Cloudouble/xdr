@@ -32,7 +32,7 @@ struct ArmParameters {
 
 struct Discriminant {
     Name type;
-    Name value;
+    Name identifier;
 };
 
 struct EnumPair {

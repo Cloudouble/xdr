@@ -208,14 +208,17 @@ const rx = {
     typedef: /typedef\s+((unsigned)\s+)?(\w+)\s+([\w\[\]\<\>\*]+)\s*;/g, namespace: /^\s*namespace\s+([\w]+)\s*\{/m,
     includes: /\%\#include\s+\".+\"/g, unsigned: /^unsigned\s+/, space: /\s+/, comments: /\/\*[\s\S]*?\*\/|\/\/.*$/gm,
     blankLines: /^\s*[\r\n]/gm, dashes: /-/g
-}, createEnum = function (body, name) {
+}, createEnum = function (body, name, entry, namespace, manifest = {}) {
     body ||= 0
     if (body && (!Array.isArray(body) || !body.length ||
         !(body.every(i => (i == null || typeof i === 'string')) || body.every(i => (i == null || typeof i === 'boolean')))))
         throw new Error(`Enum must have a body array of string or boolean identifiers: body: ${JSON.stringify(body)}, name: ${name}`)
     return class extends int {
 
+        static entry = entry
         static name = name
+        static namespace = namespace
+        static manifest = manifest
 
         #body
         #identifier
@@ -231,7 +234,7 @@ const rx = {
             super(input, true)
             this.#body = body
             this.#identifier = this.#body ? this.#body[this.value] : input
-            if (this.#body && (this.#identifier === undefined)) throw new Error(`No enum identifier found for ${typeof originalInput} ${originalInput}`)
+            if (this.#body && (this.#identifier === undefined)) throw new Error(`No valid enum identifier found for ${typeof originalInput}: ${originalInput}`)
         }
 
         get identifier() { return this.#identifier }
@@ -309,7 +312,7 @@ const BaseClass = class extends TypeDef {
         } else if (type in this.manifest.unions) {
             const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
             result = runSerialize(value, itemValue => {
-                const enumIdentifier = itemValue[unionManifest.discriminant.value], discriminantBytes = (new enumClass(enumIdentifier)).bytes,
+                const enumIdentifier = itemValue[unionManifest.discriminant.identifier], discriminantBytes = (new enumClass(enumIdentifier)).bytes,
                     armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier]),
                     itemResult = new Uint8Array(discriminantBytes.length + armBytes.length)
                 itemResult.set(discriminantBytes, 0)
@@ -371,7 +374,7 @@ const BaseClass = class extends TypeDef {
                 armDeclaration = unionManifest.arms[discriminantInstance.identifier]
             }
             if (isArrayItem) armDeclaration = { ...armDeclaration, length: undefined, mode: undefined }
-            const value = { [unionManifest.discriminant.value]: discriminantInstance.identifier },
+            const value = { [unionManifest.discriminant.identifier]: discriminantInstance.identifier },
                 { length: armLength, mode: armMode, type: armType, identifier } = armDeclaration
             if (armLength && !(armType in !XDR.types._core)) {
                 const armVariableLength = armMode === 'variable' ? this.getView(bytes).getUint32(0, false) : armLength
@@ -590,8 +593,8 @@ const XDR = {
             }, buildUnionFromMatch = function (m) {
                 const unionName = m?.groups?.name ?? m?.groups?.nameTypeDef, unionBody = m?.groups?.body ?? m?.groups?.bodyTypeDef,
                     discriminantDeclaration = m?.groups?.discriminant ?? m?.groups?.discriminantTypeDef, arms = {}, queuedArms = [],
-                    [discriminantType, discriminantValue] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim()),
-                    discriminant = { type: discriminantType, value: discriminantValue }, processArm = (c, cb, mm, dv) => {
+                    [discriminantType, discriminantIdentifier] = discriminantDeclaration.trim().split(rx.space).map(part => part.trim()),
+                    discriminant = { type: discriminantType, identifier: discriminantIdentifier }, processArm = (c, cb, mm, dv) => {
                         const [n, map] = cb(mm)
                         c[n] = map
                         arms[dv] = { type: n }
@@ -599,20 +602,20 @@ const XDR = {
                 for (let caseSpec of unionBody.split('case ')) {
                     caseSpec = caseSpec.trim()
                     if (!caseSpec) continue
-                    let [discriminantValue, armDeclaration] = caseSpec.split(':').map(s => s.trim())
+                    let [discriminantIdentifier, armDeclaration] = caseSpec.split(':').map(s => s.trim())
                     if (armDeclaration[armDeclaration.length - 1] === ';') armDeclaration = armDeclaration.slice(0, -1).trim()
-                    if (!armDeclaration) { queuedArms.push(discriminantValue); continue }
+                    if (!armDeclaration) { queuedArms.push(discriminantIdentifier); continue }
                     switch (armDeclaration.split(rx.space)[0]) {
                         case 'struct':
-                            for (const mm of `typedef ${armDeclaration};`.matchAll(rx.struct)) processArm(structs, buildStructFromMatch, mm, discriminantValue)
+                            for (const mm of `typedef ${armDeclaration};`.matchAll(rx.struct)) processArm(structs, buildStructFromMatch, mm, discriminantIdentifier)
                             break
                         case 'union':
-                            for (const mm of `typedef ${armDeclaration};`.matchAll(rx.union)) processArm(unions, buildUnionFromMatch, mm, discriminantValue)
+                            for (const mm of `typedef ${armDeclaration};`.matchAll(rx.union)) processArm(unions, buildUnionFromMatch, mm, discriminantIdentifier)
                             break
                         default:
-                            arms[discriminantValue] = parseTypeLengthModeIdentifier(armDeclaration, constants)
+                            arms[discriminantIdentifier] = parseTypeLengthModeIdentifier(armDeclaration, constants)
                     }
-                    if (queuedArms.length) for (const d of queuedArms) arms[d] = { ...arms[discriminantValue] }
+                    if (queuedArms.length) for (const d of queuedArms) arms[d] = { ...arms[discriminantIdentifier] }
                     queuedArms.length = 0
                 }
                 return [unionName, discriminant, arms]
@@ -662,15 +665,18 @@ const XDR = {
                     }
                     allUsed.add(typeName);
                     for (const [k, v] of entries) addUsedMembers(v.type)
+                    return typeIsMemberOf
                 }
-            addUsedMembers(entry)
+            const entryIsMemberOf = addUsedMembers(entry), usedManifest = { ...BaseClass.manifest, entry, name, namespace, ...used }
             for (const [k, v] of Object.entries(unions)) if (enums[v.discriminant.type]) used.enums[v.discriminant.type] = [...enums[v.discriminant.type]]
-            const typeClass = class extends BaseClass {
-                static entry = entry
-                static name = name
-                static namespace = namespace
-                static manifest = { ...BaseClass.manifest, entry, name, namespace, ...used }
-            }
+            const typeClass = entryIsMemberOf === 'enums'
+                ? createEnum(used.enums[entry], name, entry, namespace, usedManifest)
+                : class extends BaseClass {
+                    static entry = entry
+                    static name = name
+                    static namespace = namespace
+                    static manifest = usedManifest
+                }
             Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
             return typeClass
         }, definitionURL = !xCode.includes(';') ? xCode : undefined, name = options?.name ?? entry
@@ -754,9 +760,33 @@ const XDR = {
 
         const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
 
-        console.log('line 757', TypeCollectionType.manifest)
+        console.log('line 757:  TypeCollectionType.manifest: ', TypeCollectionType.manifest)
+        console.log('line 758: typeCollection: ', typeCollection)
 
-        return TypeCollectionType
+        // const typeCollectionInstance = new TypeCollectionType(typeCollection)
+        // console.log('line 762', this.serialize(typeCollection, TypeCollectionType))
+
+
+        // const parameters = { length: 10, mode: 'variable', optional: false, unsigned: false }
+        // const ParametersType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'Parameters')
+        // const parametersInstance = new ParametersType(parameters)
+
+        // console.log('line 768', parameters)
+        // console.log('line 769', parametersInstance)
+        // console.log('line 770', this.serialize(parameters, ParametersType))
+
+
+        const lengthMode = 'variable'
+        const LengthModeType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'LengthMode')
+        const lengthModeInstance = new LengthModeType(lengthMode)
+
+        console.log('line 777', lengthMode)
+        console.log('line 778', lengthModeInstance)
+        console.log('line 779', this.serialize(lengthMode, LengthModeType))
+
+
+
+        // return TypeCollectionType
     }
 
 }
