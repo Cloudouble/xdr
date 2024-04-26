@@ -368,7 +368,6 @@ const BaseClass = class extends TypeDef {
                     [byteLength, value[identifier], bytes] = runDeserialize(bytes, byteLength, identifierDeclaration, true)
                 }
             }
-            console.log('line 370', value)
             result = { value, bytes: { byteLength } }
         } else if (type in this.manifest.unions) {
             let byteLength = 0, discriminantInstance
@@ -771,14 +770,16 @@ const XDR = {
         const testValue = { length: 10, mode: 'variable', optional: false, unsigned: false }
         const testType = await this.factory((new URL('type-collection.x', import.meta.url)).href, testTypeName)
         const testInstance = new testType(testValue)
-        console.log('line 772: testTypeName', testTypeName)
-        console.log('line 773: testValue', testValue)
-        console.log('line 774: testInstance', testInstance)
-        console.log('line 775: testInstance.bytes', testInstance.bytes)
+        console.log('line 773: testTypeName', testTypeName)
+        console.log('line 774: testValue', testValue)
+        console.log('line 775: testInstance', testInstance)
+        console.log('line 776: testInstance.bytes', testInstance.bytes)
+        console.log('line 777: testInstance.toString', testInstance.toString())
+        console.log('line 778: this.parse(testInstance.toString(), testType)', this.parse(testInstance.toString(), testType))
 
         const testInstanceFromBytes = new testType(testInstance.bytes)
-        console.log('line 778: testInstanceFromBytes', testInstanceFromBytes)
-        console.log('line 779: testInstanceFromBytes.value', testInstanceFromBytes.value)
+        console.log('line 781: testInstanceFromBytes', testInstanceFromBytes)
+        console.log('line 782: testInstanceFromBytes.value', testInstanceFromBytes.value)
 
 
         // const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
