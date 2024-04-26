@@ -3,7 +3,7 @@ class TypeDef {
     #bytes
     #value
 
-    static additionalArgs = []
+    static parameters = []
     static isImplicitArray = false
     static minBytesLength = 0
     static deserialize(bytes) { return }
@@ -15,9 +15,9 @@ class TypeDef {
     static isValueInput(input) { return !(input instanceof Uint8Array) }
     static serialize(value) { return new Uint8Array() }
 
-    constructor(input, ...consumeArgs) {
+    constructor(input, ...parameters) {
         if (input instanceof Uint8Array) {
-            const consumeResult = this.#consume(input, ...consumeArgs), isConsumeResultArray = Array.isArray(consumeResult)
+            const consumeResult = this.#consume(input, ...parameters), isConsumeResultArray = Array.isArray(consumeResult)
             this.#bytes = isConsumeResultArray ? consumeResult[0] : consumeResult
             if (isConsumeResultArray && consumeResult.length > 1) this.#value = consumeResult[1]
         } else if (this.constructor.isValueInput(input)) {
@@ -37,16 +37,16 @@ class TypeDef {
     toString() { return btoa(String.fromCharCode.apply(null, this.bytes)) }
     valueOf() { return this.value }
 
-    #consume(bytes, ...consumeArgs) {
+    #consume(bytes, ...parameters) {
         if (!this.constructor.isMinBytesInput(bytes)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
-        return this.consume(bytes, ...consumeArgs)
+        return this.consume(bytes, ...parameters)
     }
 
 }
 
 class int extends TypeDef {
 
-    static additionalArgs = ['unsigned']
+    static parameters = ['unsigned']
     static minBytesLength = 4
     static deserialize(bytes) { return this.getView(bytes)[this.unsigned ? 'getUint32' : 'getInt32'](0, false) }
     static isValueInput(input) { return Number.isInteger(input) }
@@ -105,7 +105,7 @@ class double extends float {
 
 class opaque extends TypeDef {
 
-    static additionalArgs = ['length', 'mode']
+    static parameters = ['length', 'mode']
     static isImplicitArray = true
     static deserialize(bytes, instance) {
         if (instance.mode === 'fixed') return Array.from(bytes)
@@ -157,7 +157,7 @@ class string extends TypeDef {
 
     #maxLength
 
-    static additionalArgs = ['length']
+    static parameters = ['length']
     static deserialize(bytes) {
         const maxOffset = this.getView(bytes).getUint32(0, false) + 4, chars = [], decoder = new TextDecoder()
         for (let offset = 4; offset < maxOffset; offset++) chars.push(decoder.decode(bytes.subarray(offset, offset + 1)))
@@ -287,7 +287,7 @@ const BaseClass = class extends TypeDef {
             return cb(v)
         }
         if (type in XDR.types._core) {
-            result = (new XDR.types._core[type](value, ...XDR.types._core[type].additionalArgs.map(a => declaration[a]))).bytes
+            result = (new XDR.types._core[type](value, ...XDR.types._core[type].parameters.map(a => declaration[a]))).bytes
         } else if (type in this.manifest.typedefs) {
             result = this.manifest.typedefs[type].type === 'opaque' ? this.serialize(value, undefined, { ...this.manifest.typedefs[type] })
                 : runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], mode: undefined, length: undefined }))
@@ -331,14 +331,18 @@ const BaseClass = class extends TypeDef {
         const type = declaration?.type ?? this.manifest.entry
         const runDeserialize = (b, bl, d, iai) => {
             const r = this.deserialize(b, undefined, d, true, iai)
-            return [bl + r.bytes.byteLength, r.value, b.subarray(r.bytes.byteLength)]
+            return [bl + r.bytes.byteLength, (d.type === 'bool' || d.type in this.manifest.enums) ? r.identifier : r.value, b.subarray(r.bytes.byteLength)]
         }
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         let result
         if (type in XDR.types._core) {
-            result = (new XDR.types._core[type](bytes, ...XDR.types._core[type].additionalArgs.map(a => declaration[a])))
+            result = (new XDR.types._core[type](bytes, ...XDR.types._core[type].parameters.map(a => declaration[a])))
+            return raw ? result : result[type === 'bool' ? 'identifier' : 'value']
         } else if (type in this.manifest.typedefs) {
             result = this.deserialize(bytes, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
+        } else if (type in this.manifest.enums) {
+            result = new (createEnum(this.manifest.enums[type], type))(bytes)
+            return raw ? result : result.identifier
         } else if (type in this.manifest.structs) {
             const value = {}
             let byteLength = 0, entryResult
@@ -359,11 +363,12 @@ const BaseClass = class extends TypeDef {
                     }
                     entryResult = new Array(declarationVariableLength)
                     for (const i of entryResult.keys()) [byteLength, entryResult[i], bytes] = runDeserialize(bytes, byteLength, { ...identifierDeclaration, length: undefined, mode: undefined }, true)
-                    if (identifier) value[identifier] = entryResult
+                    value[identifier] = entryResult
                 } else {
                     [byteLength, value[identifier], bytes] = runDeserialize(bytes, byteLength, identifierDeclaration, true)
                 }
             }
+            console.log('line 370', value)
             result = { value, bytes: { byteLength } }
         } else if (type in this.manifest.unions) {
             let byteLength = 0, discriminantInstance
@@ -762,33 +767,25 @@ const XDR = {
         }
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
 
-        const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
+        const testTypeName = 'Parameters'
+        const testValue = { length: 10, mode: 'variable', optional: false, unsigned: false }
+        const testType = await this.factory((new URL('type-collection.x', import.meta.url)).href, testTypeName)
+        const testInstance = new testType(testValue)
+        console.log('line 772: testTypeName', testTypeName)
+        console.log('line 773: testValue', testValue)
+        console.log('line 774: testInstance', testInstance)
+        console.log('line 775: testInstance.bytes', testInstance.bytes)
 
+        const testInstanceFromBytes = new testType(testInstance.bytes)
+        console.log('line 778: testInstanceFromBytes', testInstanceFromBytes)
+        console.log('line 779: testInstanceFromBytes.value', testInstanceFromBytes.value)
+
+
+        // const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
         // console.log('line 757:  TypeCollectionType.manifest: ', TypeCollectionType.manifest)
         // console.log('line 758: typeCollection: ', typeCollection)
-
         // const typeCollectionInstance = new TypeCollectionType(typeCollection)
         // console.log('line 762', this.serialize(typeCollection, TypeCollectionType))
-
-
-        const parameters = { length: 10, mode: 'variable', optional: false, unsigned: false }
-        const ParametersType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'Parameters')
-        const parametersInstance = new ParametersType(parameters)
-
-        console.log('line 774', parameters)
-        console.log('line 775', parametersInstance)
-        console.log('line 776', parametersInstance.bytes)
-
-
-        // const lengthMode = 1
-        // const LengthModeType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'LengthMode')
-        // const lengthModeInstance = new LengthModeType(lengthMode)
-
-        // console.log('line 783', lengthMode)
-        // console.log('line 784', lengthModeInstance)
-        // console.log('line 785', this.serialize(lengthMode, LengthModeType))
-
-
 
         // return TypeCollectionType
     }
