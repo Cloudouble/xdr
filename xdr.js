@@ -275,7 +275,7 @@ const BaseClass = class extends TypeDef {
         let type = declaration?.type ?? this.manifest.entry, result
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         const runSerialize = (v, cb) => {
-            if (declaration.mode && declaration.length && Array.isArray(v)) {
+            if (((declaration.mode === 'variable') || declaration.length) && Array.isArray(v)) {
                 let totalLength = 0
                 const chunks = [[new int(v.length).bytes, totalLength]]
                 totalLength += 4
@@ -354,7 +354,7 @@ const BaseClass = class extends TypeDef {
                     byteLength += 4
                     if (!hasField) continue
                 }
-                if (declarationLength && !XDR.types._core[declarationType]) {
+                if (((declarationMode === 'variable') || declarationLength) && !XDR.types._core[declarationType]) {
                     const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
                     if (declarationMode === 'variable') {
                         if (declarationVariableLength > declarationLength) throw new Error('Variable length exceeds declaration length')
@@ -766,8 +766,8 @@ const XDR = {
         }
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
 
-        const testTypeName = 'StructEntry'
-        const testValue = { key: "abc", properties: [{ type: "string", identifier: "name", parameters: { length: 10, mode: "fixed", optional: false, unsigned: false } }] }
+        const testTypeName = 'TypeCollection'
+        const testValue = typeCollection
         const testType = await this.factory((new URL('type-collection.x', import.meta.url)).href, testTypeName)
         const testInstance = new testType(testValue)
         console.log('line 773: testTypeName', testTypeName)
@@ -780,7 +780,6 @@ const XDR = {
         const testInstanceFromBytes = new testType(testInstance.bytes)
         console.log('line 781: testInstanceFromBytes', testInstanceFromBytes)
         console.log('line 782: testInstanceFromBytes.value', testInstanceFromBytes.value)
-
 
         // const TypeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
         // console.log('line 757:  TypeCollectionType.manifest: ', TypeCollectionType.manifest)
