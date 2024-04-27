@@ -766,15 +766,15 @@ const XDR = {
         }
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
 
-        const testTypeName = 'Parameters'
-        const testValue = { length: 10, mode: 'variable', optional: false, unsigned: false }
+        const testTypeName = 'StructEntry'
+        const testValue = { key: "abc", properties: [{ type: "string", identifier: "name", parameters: { length: 10, mode: "fixed", optional: false, unsigned: false } }] }
         const testType = await this.factory((new URL('type-collection.x', import.meta.url)).href, testTypeName)
         const testInstance = new testType(testValue)
         console.log('line 773: testTypeName', testTypeName)
         console.log('line 774: testValue', testValue)
         console.log('line 775: testInstance', testInstance)
-        console.log('line 776: testInstance.bytes', testInstance.bytes)
-        console.log('line 777: testInstance.toString', testInstance.toString())
+        console.log('line 776: testInstance.bytes', testInstance.bytes, testInstance.bytes.length)
+        console.log('line 777: testInstance.toString', testInstance.toString(), testInstance.toString().length)
         console.log('line 778: this.parse(testInstance.toString(), testType)', this.parse(testInstance.toString(), testType))
 
         const testInstanceFromBytes = new testType(testInstance.bytes)
