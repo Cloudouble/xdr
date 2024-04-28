@@ -195,10 +195,6 @@ class voidType extends TypeDef {
 
 }
 
-class manifestType extends TypeDef {
-
-}
-
 const rx = {
     'const': /const\s+([A-Z_]+)\s*=\s*(0[xX][\dA-Fa-f]+|0[0-7]*|\d+)\s*;/g, 'enum': /enum\s+(\w+)\s*\{([\s\S]*?)\}\s*;|typedef\s+enum\s*\{([\s\S]*?)\}\s+(\w+);/g,
     struct: /struct\s+(?<name>\w+)\s*\{(?<body>[^\{\}]*?)\}\s*;|typedef\s+struct\s*\{(?<bodyTypeDef>[^\{\}]*?)\}\s+(?<nameTypeDef>\w+)\s*;/g,
@@ -437,6 +433,91 @@ const BaseClass = class extends TypeDef {
 }
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
+class TypeCollection extends BaseClass {
+    static entry = 'TypeCollection'
+    static name = 'TypeCollection'
+    static namespace = '_core'
+    static manifest = {
+        entry: 'TypeCollection', name: 'TypeCollection',
+        structs: {
+            TypeCollection: new Map([
+                ['library', { type: 'TypeLibrary' }],
+                ['types', { type: 'TypeEntry', mode: 'variable' }]
+            ]),
+            TypeLibrary: new Map([
+                ["enums", { type: "EnumEntry", mode: "variable" }],
+                ["structs", { type: "StructEntry", mode: "variable" }],
+                ["typedefs", { type: "TypeDefEntry", mode: "variable" }],
+                ["unions", { type: "UnionEntry", mode: "variable" }]
+            ]),
+            EnumEntry: new Map([
+                ["key", { type: "Name" }],
+                ["body", { type: "EnumPair", mode: "variable" }]
+            ]),
+            EnumPair: new Map([
+                ["value", { type: "int", unsigned: true }],
+                ["identifier", { type: "Name" }]
+            ]),
+            StructEntry: new Map([
+                ["key", { type: "Name" }],
+                ["properties", { type: "PropertyParameters", mode: "variable" }]
+            ]),
+            PropertyParameters: new Map([
+                ["type", { type: "Name" }],
+                ["identifier", { type: "Name" }],
+                ["parameters", { type: "Parameters" }]
+            ]),
+            Parameters: new Map([
+                ["length", { type: "int", unsigned: true }],
+                ["mode", { type: "LengthMode" }],
+                ["optional", { type: "bool" }],
+                ["unsigned", { type: "bool" }]
+            ]),
+            TypeDefEntry: new Map([
+                ["key", { type: "Name" }],
+                ["declaration", { type: "TypeParameters" }]
+            ]),
+            TypeParameters: new Map([
+                ["type", { type: "Name", }],
+                ["parameters", { type: "Parameters", optional: true }]
+            ]),
+            UnionEntry: new Map([
+                ["key", { type: "Name" }],
+                ["discriminant", { type: "Discriminant" }],
+                ["arms", { type: "ArmParameters", mode: "variable" }]
+            ]),
+            "Discriminant": new Map([
+                ["type", { type: "Name" }],
+                ["identifier", { type: "Name" }]
+            ]),
+            ArmParameters: new Map([
+                ["type", { type: "Name" }],
+                ["arm", { type: "Name" }],
+                ["identifier", { type: "Name", optional: true }],
+                ["parameters", { type: "Parameters", optional: true }]
+            ]),
+            "TypeEntry": new Map([
+                ["key", { type: "Name" }],
+                ["manifest", { type: "TypeManifest" }]
+            ]),
+            "TypeManifest": new Map([
+                ["entry", { type: "Name" }],
+                ["enums", { type: "Name", mode: "variable" }],
+                ["name", { type: "Name" }],
+                ["structs", { type: "Name", mode: "variable" }],
+                ["typedefs", { type: "Name", mode: "variable" }],
+                ["unions", { type: "Name", mode: "variable" }]
+            ])
+        },
+        "unions": {},
+        "typedefs": {
+            Name: { type: "string", mode: "variable", identifier: "Name" }
+        },
+        "enums": { LengthMode: ["fixed", "variable"] }
+    }
+}
+
+
 const XDR = {
     version: '1.1.9',
     types: { _anon: {}, _base: { TypeDef, BaseClass }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
@@ -492,9 +573,13 @@ const XDR = {
     import: async function (typeCollection = {}, options = {}, defaultOptions = {}, format = 'xdr') {
         format = format === 'json' ? 'json' : 'xdr'
         if (typeof typeCollection === 'string') {
-            typeCollection = await fetch((new URL(typeCollection, import.meta.url)).href).then(r => r.text())
+            const typeCollectionUrl = ((format === 'xdr' && (typeCollection[0] === '/' || typeCollection[0] === '.' || typeCollection.includes(':')))
+                || (format === 'json' && typeCollection[0] !== '{')) ? typeCollection : undefined
+            typeCollection = await fetch(typeCollectionUrl).then(r => r.text())
             typeCollection = format === 'json' ? JSON.parse(typeCollection) : this.parse(typeCollection, manifestType)
         }
+        console.log('line 500', typeCollection)
+        return typeCollection
         if (!typeCollection || (typeof typeCollection !== 'object')) throw new Error('typeCollection must be an object')
         if (typeof options !== 'object') throw new Error('options must be an object')
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
@@ -767,6 +852,7 @@ const XDR = {
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
         const typeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
         typeCollectionType.name = 'TypeCollection'
+        console.log('line 778', typeCollectionType.manifest)
         const typeCollectionInstance = new typeCollectionType(typeCollection)
         return raw ? typeCollectionInstance : `${typeCollectionInstance}`
     }
