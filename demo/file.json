@@ -26,29 +26,41 @@
                     {
                         "type": "string",
                         "identifier": "filename",
-                        "params": {
+                        "parameters": {
                             "length": 255,
-                            "mode": "variable"
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
                         }
                     },
                     {
                         "type": "filetype",
-                        "identifier": "type"
+                        "identifier": "type",
+                        "parameters": {
+                            "length": 0,
+                            "mode": "fixed",
+                            "optional": false,
+                            "unsigned": false
+                        }
                     },
                     {
                         "type": "string",
                         "identifier": "owner",
-                        "params": {
+                        "parameters": {
                             "length": 32,
-                            "mode": "variable"
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
                         }
                     },
                     {
                         "type": "opaque",
                         "identifier": "data",
-                        "params": {
+                        "parameters": {
                             "length": 65535,
-                            "mode": "variable"
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
                         }
                     }
                 ]
@@ -65,24 +77,34 @@
                 "arms": [
                     {
                         "type": "void",
-                        "arm": "TEXT"
+                        "arm": "TEXT",
+                        "parameters": {
+                            "length": 0,
+                            "mode": "fixed",
+                            "optional": false,
+                            "unsigned": false
+                        }
                     },
                     {
                         "type": "string",
                         "arm": "DATA",
                         "identifier": "creator",
-                        "params": {
+                        "parameters": {
                             "length": 255,
-                            "mode": "variable"
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
                         }
                     },
                     {
                         "type": "string",
                         "arm": "EXEC",
                         "identifier": "interpretor",
-                        "params": {
+                        "parameters": {
                             "length": 255,
-                            "mode": "variable"
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
                         }
                     }
                 ]
