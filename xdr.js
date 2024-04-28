@@ -440,80 +440,27 @@ class TypeCollection extends BaseClass {
     static manifest = {
         entry: 'TypeCollection', name: 'TypeCollection',
         structs: {
-            TypeCollection: new Map([
-                ['library', { type: 'TypeLibrary' }],
-                ['types', { type: 'TypeEntry', mode: 'variable' }]
-            ]),
-            TypeLibrary: new Map([
-                ["enums", { type: "EnumEntry", mode: "variable" }],
-                ["structs", { type: "StructEntry", mode: "variable" }],
-                ["typedefs", { type: "TypeDefEntry", mode: "variable" }],
-                ["unions", { type: "UnionEntry", mode: "variable" }]
-            ]),
-            EnumEntry: new Map([
-                ["key", { type: "Name" }],
-                ["body", { type: "EnumPair", mode: "variable" }]
-            ]),
-            EnumPair: new Map([
-                ["value", { type: "int", unsigned: true }],
-                ["identifier", { type: "Name" }]
-            ]),
-            StructEntry: new Map([
-                ["key", { type: "Name" }],
-                ["properties", { type: "PropertyParameters", mode: "variable" }]
-            ]),
-            PropertyParameters: new Map([
-                ["type", { type: "Name" }],
-                ["identifier", { type: "Name" }],
-                ["parameters", { type: "Parameters" }]
-            ]),
-            Parameters: new Map([
-                ["length", { type: "int", unsigned: true }],
-                ["mode", { type: "LengthMode" }],
-                ["optional", { type: "bool" }],
-                ["unsigned", { type: "bool" }]
-            ]),
-            TypeDefEntry: new Map([
-                ["key", { type: "Name" }],
-                ["declaration", { type: "TypeParameters" }]
-            ]),
-            TypeParameters: new Map([
-                ["type", { type: "Name", }],
-                ["parameters", { type: "Parameters", optional: true }]
-            ]),
-            UnionEntry: new Map([
-                ["key", { type: "Name" }],
-                ["discriminant", { type: "Discriminant" }],
-                ["arms", { type: "ArmParameters", mode: "variable" }]
-            ]),
-            "Discriminant": new Map([
-                ["type", { type: "Name" }],
-                ["identifier", { type: "Name" }]
-            ]),
-            ArmParameters: new Map([
-                ["type", { type: "Name" }],
-                ["arm", { type: "Name" }],
-                ["identifier", { type: "Name", optional: true }],
-                ["parameters", { type: "Parameters", optional: true }]
-            ]),
-            "TypeEntry": new Map([
-                ["key", { type: "Name" }],
-                ["manifest", { type: "TypeManifest" }]
-            ]),
-            "TypeManifest": new Map([
-                ["entry", { type: "Name" }],
-                ["enums", { type: "Name", mode: "variable" }],
-                ["name", { type: "Name" }],
-                ["structs", { type: "Name", mode: "variable" }],
-                ["typedefs", { type: "Name", mode: "variable" }],
-                ["unions", { type: "Name", mode: "variable" }]
-            ])
+            TypeCollection: new Map([['library', { type: 'TypeLibrary' }], ['types', { type: 'TypeEntry', mode: 'variable' }]]),
+            TypeLibrary: new Map([['enums', { type: 'EnumEntry', mode: 'variable' }], ['structs', { type: 'StructEntry', mode: 'variable' }],
+            ['typedefs', { type: 'TypeDefEntry', mode: 'variable' }], ['unions', { type: 'UnionEntry', mode: 'variable' }]]),
+            EnumEntry: new Map([['key', { type: 'Name' }], ['body', { type: 'EnumPair', mode: 'variable' }]]),
+            EnumPair: new Map([['value', { type: 'int', unsigned: true }], ['identifier', { type: 'Name' }]]),
+            StructEntry: new Map([['key', { type: 'Name' }], ['properties', { type: 'PropertyParameters', mode: 'variable' }]]),
+            PropertyParameters: new Map([['type', { type: 'Name' }], ['identifier', { type: 'Name' }], ['parameters', { type: 'Parameters', optional: true }]]),
+            Parameters: new Map([['length', { type: 'int', unsigned: true }], ['mode', { type: 'LengthMode' }], ['optional', { type: 'bool' }], ['unsigned', { type: 'bool' }]]),
+            TypeDefEntry: new Map([['key', { type: 'Name' }], ['declaration', { type: 'TypeParameters' }]]),
+            TypeParameters: new Map([['type', { type: 'Name', }], ['parameters', { type: 'Parameters', optional: true }]]),
+            UnionEntry: new Map([['key', { type: 'Name' }], ['discriminant', { type: 'Discriminant' }], ['arms', { type: 'ArmParameters', mode: 'variable' }]]),
+            Discriminant: new Map([['type', { type: 'Name' }], ['identifier', { type: 'Name' }]]),
+            ArmParameters: new Map([['type', { type: 'Name' }], ['arm', { type: 'Name' }],
+            ['identifier', { type: 'Name', optional: true }], ['parameters', { type: 'Parameters', optional: true }]]),
+            TypeEntry: new Map([['key', { type: 'Name' }], ['manifest', { type: 'TypeManifest' }]]),
+            TypeManifest: new Map([['entry', { type: 'Name' }], ['enums', { type: 'Name', mode: 'variable' }], ['name', { type: 'Name' }],
+            ['structs', { type: 'Name', mode: 'variable' }], ['typedefs', { type: 'Name', mode: 'variable' }], ['unions', { type: 'Name', mode: 'variable' }]])
         },
-        "unions": {},
-        "typedefs": {
-            Name: { type: "string", mode: "variable", identifier: "Name" }
-        },
-        "enums": { LengthMode: ["fixed", "variable"] }
+        unions: {},
+        typedefs: { Name: { type: 'string', mode: 'variable', identifier: 'Name' } },
+        enums: { LengthMode: ['fixed', 'variable'] }
     }
 }
 
