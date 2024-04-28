@@ -1,0 +1,111 @@
+{
+    "library": {
+        "enums": [
+            {
+                "key": "filekind",
+                "body": [
+                    {
+                        "value": 0,
+                        "identifier": "TEXT"
+                    },
+                    {
+                        "value": 1,
+                        "identifier": "DATA"
+                    },
+                    {
+                        "value": 2,
+                        "identifier": "EXEC"
+                    }
+                ]
+            }
+        ],
+        "structs": [
+            {
+                "key": "file",
+                "properties": [
+                    {
+                        "type": "string",
+                        "identifier": "filename",
+                        "params": {
+                            "length": 255,
+                            "mode": "variable"
+                        }
+                    },
+                    {
+                        "type": "filetype",
+                        "identifier": "type"
+                    },
+                    {
+                        "type": "string",
+                        "identifier": "owner",
+                        "params": {
+                            "length": 32,
+                            "mode": "variable"
+                        }
+                    },
+                    {
+                        "type": "opaque",
+                        "identifier": "data",
+                        "params": {
+                            "length": 65535,
+                            "mode": "variable"
+                        }
+                    }
+                ]
+            }
+        ],
+        "typedefs": [],
+        "unions": [
+            {
+                "key": "filetype",
+                "discriminant": {
+                    "type": "filekind",
+                    "identifier": "kind"
+                },
+                "arms": [
+                    {
+                        "type": "void",
+                        "arm": "TEXT"
+                    },
+                    {
+                        "type": "string",
+                        "arm": "DATA",
+                        "identifier": "creator",
+                        "params": {
+                            "length": 255,
+                            "mode": "variable"
+                        }
+                    },
+                    {
+                        "type": "string",
+                        "arm": "EXEC",
+                        "identifier": "interpretor",
+                        "params": {
+                            "length": 255,
+                            "mode": "variable"
+                        }
+                    }
+                ]
+            }
+        ]
+    },
+    "types": [
+        {
+            "key": "file",
+            "manifest": {
+                "entry": "file",
+                "name": "file",
+                "structs": [
+                    "file"
+                ],
+                "unions": [
+                    "filetype"
+                ],
+                "typedefs": [],
+                "enums": [
+                    "filekind"
+                ]
+            }
+        }
+    ]
+}

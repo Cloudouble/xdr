@@ -517,16 +517,26 @@ const XDR = {
     },
     stringify: function (value, typedef, arrayLength, arrayMode) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, arrayLength, arrayMode))) },
 
-    import: async function (typeCollection = {}, options = {}, defaultOptions = {}, format = 'xdr') {
-        format = format === 'json' ? 'json' : 'xdr'
+    import: async function (typeCollection = {}, options = {}, defaultOptions = {}, format = undefined) {
+
         if (typeof typeCollection === 'string') {
-            const typeCollectionUrl = ((format === 'xdr' && (typeCollection[0] === '/' || typeCollection[0] === '.' || typeCollection.includes(':')))
-                || (format === 'json' && typeCollection[0] !== '{')) ? typeCollection : undefined
-            typeCollection = await fetch(typeCollectionUrl).then(r => r.text())
-            typeCollection = format === 'json' ? JSON.parse(typeCollection) : this.parse(typeCollection, manifestType)
+            if (typeCollection[0] === '/' || typeCollection[0] === '.' || typeCollection.endsWith('.xdr') || typeCollection.endsWith('.json') || typeCollection.includes('.') || typeCollection.includes(':')) {
+                if (!format) {
+                    if (typeCollection.endsWith('.xdr')) format = 'xdr'
+                    if (typeCollection.endsWith('.json')) format = 'json'
+                }
+                typeCollection = (await fetch(typeCollection).then(r => r.text()))
+            }
+            if (!format) format = typeCollection[0] === '{' ? 'json' : 'xdr'
+            format = format === 'json' ? 'json' : 'xdr'
+            typeCollection = format === 'json' ? JSON.parse(typeCollection) : this.parse(typeCollection, TypeCollection)
+        } else if (typeCollection instanceof TypeCollection) {
+            typeCollection = typeCollection.value
         }
-        console.log('line 500', typeCollection)
+
+        console.log('line 537', typeCollection)
         return typeCollection
+
         if (!typeCollection || (typeof typeCollection !== 'object')) throw new Error('typeCollection must be an object')
         if (typeof options !== 'object') throw new Error('options must be an object')
         if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
@@ -797,10 +807,7 @@ const XDR = {
             typeCollection.types.push({ key: name, manifest })
         }
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
-        const typeCollectionType = await this.factory((new URL('type-collection.x', import.meta.url)).href, 'TypeCollection')
-        typeCollectionType.name = 'TypeCollection'
-        console.log('line 778', typeCollectionType.manifest)
-        const typeCollectionInstance = new typeCollectionType(typeCollection)
+        const typeCollectionInstance = new TypeCollection(typeCollection)
         return raw ? typeCollectionInstance : `${typeCollectionInstance}`
     }
 
