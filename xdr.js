@@ -560,46 +560,44 @@ const XDR = {
             }
             library.structs = structs
         }
-
-        console.log('line 564', library)
-        console.log('line 565', types)
-
-        return
-
-        for (const typeName of types) {
-            const { key, manifest } = types[typeName], { entry, name, namespace } = manifest
-
-            // const manifest = { ...typeCollection[name] }, typeOptions = { ...(options[name] ?? defaultOptions) }, entry = typeOptions?.entry ?? name
-            // delete typeOptions.entry
-            // if (!manifest || !(manifest instanceof Object)) throw new Error(`typeCollection[${name}] must be an object`)
-            // if (libraryTypes) for (const scope in libraryTypes) {
-            //     const expandedScope = {}
-            //     if (manifest[scope]) for (const t of manifest[scope]) expandedScope[t] = libraryTypes[scope][t]
-            //     manifest[scope] = expandedScope
-            // }
-            // const name = typeOptions.name ?? manifest.name, namespace = typeOptions.namespace ?? manifest.namespace
-            const typeClass = class extends BaseClass {
-                static entry = entry
-                static name = name
-                static namespace = namespace
-                static manifest = {
-                    ...BaseClass.manifest, entry, name, namespace,
-                    structs: Object.fromEntries(manifest.structs.map(sn => [sn, new Map(v)])),
-                    unions: {},
-                    typedefs: {},
-                    enums: {}
-
-                    // enums: manifest?.enums ?? {},
-                    // structs: Object.fromEntries(Object.entries(manifest?.structs ?? {}).map(([k, v]) => [k, new Map(v)])),
-                    // typedefs: manifest?.typedefs ?? {}, unions: manifest?.unions ?? {},
+        if (library.typedefs) {
+            const typedefs = {}
+            for (const td of library.typedefs) typedefs[td.key] = { type: td.declaration.type, ...(td.declaration.parameters ?? {}) }
+            library.typedefs = typedefs
+        }
+        if (library.unions) {
+            const unions = {}
+            for (const un of library.unions) {
+                unions[un.key] = { arms: {}, discriminant: un.discriminant }
+                for (const a of un.arms) {
+                    unions[un.key].arms[a.arm] = { type: a.type, ...(a.parameters ?? {}) }
+                    if (a.identifier) unions[un.key].arms[a.arm].identifier = a.identifier
                 }
             }
+            library.unions = unions
+        }
+        for (const typeEntry of types) {
+            const { key, manifest: manifestSummary } = typeEntry, { entry, name, namespace } = manifestSummary
+            const manifest = { entry, name, namespace }
+            manifest.name ??= ((options[key] ?? {}).name ?? key)
+            manifest.entry ??= ((options[key] ?? {}).entry ?? key)
+            manifest.namespace ??= ((options[key] ?? {}).namespace ?? defaultOptions.namespace ?? undefined)
+            for (const scope in library) {
+                manifest[scope] = {}
+                for (const typeName of (manifestSummary[scope] ?? [])) if (library[scope][typeName]) manifest[scope][typeName] = library[scope][typeName]
+            }
+            const typeClass = class extends BaseClass {
+                static entry = manifest.entry
+                static name = manifest.name
+                static namespace = manifest.namespace
+                static manifest = { ...BaseClass.manifest, ...manifest }
+            }
             Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
-            if (namespace) {
-                this.types[namespace] ||= {}
-                this.types[namespace][name] = typeClass
+            if (manifest.namespace) {
+                this.types[manifest.namespace] ||= {}
+                this.types[manifest.namespace][key] = typeClass
             } else {
-                this.types._anon[name] = typeClass
+                this.types._anon[key] = typeClass
             }
         }
     },
