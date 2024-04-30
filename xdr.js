@@ -475,7 +475,6 @@ class TypeCollection extends BaseClass {
     }
 }
 
-
 const XDR = {
     version: '1.1.9',
     types: { _anon: {}, _base: { TypeDef, BaseClass }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
@@ -483,17 +482,18 @@ const XDR = {
         includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
         libraryKey: '__library__', cacheExpiry: 10000
     },
-    deserialize: function (bytes, typeDef, arrayLength, arrayMode, raw) {
+    deserialize: function (bytes, typeDef, parameters = {}, raw = false) {
+        const { length, mode } = parameters
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
         if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
-        if (!arrayLength || typeDef.isImplicitArray) {
-            const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))
+        if (!length || typeDef.isImplicitArray) {
+            const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [length, mode] : []))
             return raw ? r : r.value
         }
-        if (arrayMode !== 'variable') arrayMode = 'fixed'
-        const arrayActualLength = arrayMode === 'variable' ? typeDef.getView(bytes).getUint32(0, false) : arrayLength
-        if (arrayMode === 'variable') {
-            if (arrayActualLength > arrayLength) throw new Error('Variable length array exceeds max array length')
+        if (mode !== 'variable') mode = 'fixed'
+        const arrayActualLength = mode === 'variable' ? typeDef.getView(bytes).getUint32(0, false) : length
+        if (mode === 'variable') {
+            if (arrayActualLength > length) throw new Error('Variable length array exceeds max array length')
             bytes = bytes.subarray(4)
         }
         const result = new Array(arrayActualLength)
@@ -504,15 +504,16 @@ const XDR = {
         }
         return result
     },
-    serialize: function (value, typeDef, arrayLength, arrayMode) {
+    serialize: function (value, typeDef, parameters = {}) {
+        const { length, mode } = parameters
         if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
-        if (!arrayLength || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [arrayLength, arrayMode] : []))).bytes
+        if (!length || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [length, mode] : []))).bytes
         if (!Array.isArray(value)) throw new Error('value must be an array')
-        if (arrayMode !== 'variable') arrayMode = 'fixed'
-        const arrayActualLength = arrayMode === 'variable' ? value.length : arrayLength, chunks = []
+        if (mode !== 'variable') mode = 'fixed'
+        const arrayActualLength = mode === 'variable' ? value.length : length, chunks = []
         if (value.length != arrayActualLength) throw new Error('value length must match array length')
         let totalLength = 0
-        if (arrayMode === 'variable') {
+        if (mode === 'variable') {
             chunks.push([new int(arrayActualLength).bytes, totalLength])
             totalLength += 4
         }
@@ -521,12 +522,12 @@ const XDR = {
         for (const chunk of chunks) result.set(...chunk)
         return result
     },
-    parse: function (str, typedef, arrayLength, arrayMode, raw) {
+    parse: function (str, typedef, parameters = {}, raw = false) {
         const binaryString = atob(str), bytes = new Uint8Array(binaryString.length)
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i)
-        return this.deserialize(bytes, typedef, arrayLength, arrayMode, raw)
+        return this.deserialize(bytes, typedef, parameters, raw)
     },
-    stringify: function (value, typedef, arrayLength, arrayMode) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, arrayLength, arrayMode))) },
+    stringify: function (value, typedef, parameters = {}) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, parameters))) },
 
     import: async function (typeCollection = {}, options = {}, namespace = undefined, format = undefined) {
         if (typeof typeCollection === 'string') {
@@ -561,27 +562,20 @@ const XDR = {
             const structs = {}
             for (const st of library.structs) {
                 structs[st.key] = new Map()
-                for (const p of st.properties) {
-                    const identifier = p.identifier
-                    delete p.identifier
-                    structs[st.key].set(identifier, { type: p.type, ...(p.parameters ?? {}) })
-                }
+                for (const p of st.properties) structs[st.key].set(p.identifier, p)
             }
             library.structs = structs
         }
         if (library.typedefs) {
             const typedefs = {}
-            for (const td of library.typedefs) typedefs[td.key] = { type: td.declaration.type, ...(td.declaration.parameters ?? {}) }
+            for (const td of library.typedefs) typedefs[td.key] = td.declaration
             library.typedefs = typedefs
         }
         if (library.unions) {
             const unions = {}
             for (const un of library.unions) {
                 unions[un.key] = { arms: {}, discriminant: un.discriminant }
-                for (const a of un.arms) {
-                    unions[un.key].arms[a.arm] = { type: a.type, ...(a.parameters ?? {}) }
-                    if (a.identifier) unions[un.key].arms[a.arm].identifier = a.identifier
-                }
+                for (const a of un.arms) unions[un.key].arms[a.arm] = a
             }
             library.unions = unions
         }
@@ -639,7 +633,9 @@ const XDR = {
                     identifier = identifier.slice(0, identifierIndexOfBracketStart)
                     mode = 'fixed'
                 }
-                return { type, length, mode, identifier, optional, unsigned }
+                const parameters = {}, rawParameters = { length, mode, optional, unsigned }
+                for (const param of ['length', 'mode', 'optional', 'unsigned']) if (rawParameters[param] !== defaultParameters[param]) parameters[param] = rawParameters[param]
+                return { type, identifier, parameters }
             }
             name ??= entry
             const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}, cleanXCode = (s, r = '') => xCode.replace(s, r).replace(rx.blankLines, '').trim()
@@ -649,8 +645,14 @@ const XDR = {
                 xCode = cleanXCode(m[0])
             }
             for (const t of xCode.matchAll(rx.typedef)) {
-                const typeObj = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
-                typedefs[typeObj.identifier] = typeObj
+                const declaration = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
+                typedefs[declaration.identifier] = declaration
+                delete declaration.identifier
+                if (Object.keys(declaration.parameters).length) {
+                    declaration.parameters = { ...defaultParameters, ...declaration.parameters }
+                } else {
+                    delete declaration.parameters
+                }
                 xCode = cleanXCode(t[0])
             }
             for (const m of xCode.matchAll(rx.enum)) {
@@ -674,9 +676,16 @@ const XDR = {
                     declaration = declaration.trim()
                     if (declaration[declaration.length - 1] === ';') declaration = declaration.slice(0, -1).trim()
                     if ((!declaration) || (declaration[0] === ';')) continue
-                    const { type, length, mode, identifier, optional, unsigned } = parseTypeLengthModeIdentifier(declaration, constants)
-                    if (!type || !identifier) throw new Error(`Struct ${structName} has invalid declaration: ${declaration};`)
-                    map.set(identifier, { type, length, mode, optional, unsigned })
+                    const propertyDeclaration = parseTypeLengthModeIdentifier(declaration, constants)
+                    if (!propertyDeclaration.type || !propertyDeclaration.identifier) throw new Error(`Struct ${structName} has invalid declaration: ${declaration};`)
+                    const propertyIdentifier = propertyDeclaration.identifier
+                    delete propertyDeclaration.identifier
+                    if (Object.keys(propertyDeclaration.parameters).length) {
+                        propertyDeclaration.parameters = { ...defaultParameters, ...propertyDeclaration.parameters }
+                    } else {
+                        delete propertyDeclaration.parameters
+                    }
+                    map.set(propertyIdentifier, propertyDeclaration)
                 }
                 return [structName, map]
             }, buildUnionFromMatch = function (m) {
@@ -703,6 +712,7 @@ const XDR = {
                             break
                         default:
                             arms[discriminantIdentifier] = parseTypeLengthModeIdentifier(armDeclaration, constants)
+                            arms[discriminantIdentifier].arm = discriminantIdentifier
                     }
                     if (queuedArms.length) for (const d of queuedArms) arms[d] = { ...arms[discriminantIdentifier] }
                     queuedArms.length = 0
@@ -809,8 +819,7 @@ const XDR = {
         const source = this.types[namespace] ?? this.types._anon, typeManifests = {}
         format = format === 'json' ? 'json' : 'xdr'
         for (const [k, v] of Object.entries(source)) if (v.manifest && v.manifest instanceof Object) typeManifests[k] = JSON.parse(JSON.stringify(v.manifest))
-        const typeCollection = { library: { enums: [], structs: [], typedefs: [], unions: [] }, types: [] },
-            defaultParameters = { length: 0, mode: 'fixed', optional: false, unsigned: false }
+        const typeCollection = { library: { enums: [], structs: [], typedefs: [], unions: [] }, types: [] }
         for (const name in typeManifests) {
             const manifest = { ...typeManifests[name] }
             for (const key in manifest.enums) typeCollection.library.enums.push({
@@ -818,28 +827,16 @@ const XDR = {
             })
             for (const key in manifest.structs) {
                 const properties = []
-                for (const property of manifest.structs[key]) {
-                    const [identifier, p] = property, { type } = p, parameters = {}, declaration = { type, identifier }
-                    for (const k of ['length', 'mode', 'optional', 'unsigned']) parameters[k] = p[k] ?? defaultParameters[k]
-                    if (Object.keys(parameters).length) declaration.parameters = parameters
-                    properties.push(declaration)
-                }
+                for (const property of manifest.structs[key]) properties.push(property)
                 typeCollection.library.structs.push({ key, properties })
             }
             for (const key in manifest.typedefs) {
-                const p = manifest.typedefs[key], { type } = p, parameters = {}, declaration = { type }
-                for (const k of ['length', 'mode', 'optional', 'unsigned']) parameters[k] = p[k] ?? defaultParameters[k]
-                if (Object.keys(parameters).length) declaration.parameters = parameters
-                typeCollection.library.typedefs.push({ key, declaration })
+                typeCollection.library.typedefs.push({ key, declaration: manifest.typedefs[key] })
             }
             for (const key in manifest.unions) {
                 const discriminant = { ...manifest.unions[key].discriminant }, arms = []
                 for (const arm in manifest.unions[key].arms) {
-                    const a = manifest.unions[key].arms[arm], { identifier, type } = a, declaration = { type, arm }, parameters = {}
-                    for (const k of ['length', 'mode', 'optional', 'unsigned']) parameters[k] = a[k] ?? defaultParameters[k]
-                    if (identifier) declaration.identifier = identifier
-                    if (Object.keys(parameters).length) declaration.parameters = parameters
-                    arms.push(declaration)
+                    arms.push(manifest.unions[key].arms[arm])
                 }
                 typeCollection.library.unions.push({ key, discriminant, arms })
             }
