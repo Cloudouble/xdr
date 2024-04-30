@@ -15,9 +15,9 @@ class TypeDef {
     static isValueInput(input) { return !(input instanceof Uint8Array) }
     static serialize(value) { return new Uint8Array() }
 
-    constructor(input, ...parameters) {
+    constructor(input, parameters = {}) {
         if (input instanceof Uint8Array) {
-            const consumeResult = this.#consume(input, ...parameters), isConsumeResultArray = Array.isArray(consumeResult)
+            const consumeResult = this.#consume(input, parameters), isConsumeResultArray = Array.isArray(consumeResult)
             this.#bytes = isConsumeResultArray ? consumeResult[0] : consumeResult
             if (isConsumeResultArray && consumeResult.length > 1) this.#value = consumeResult[1]
         } else if (this.constructor.isValueInput(input)) {
@@ -31,7 +31,7 @@ class TypeDef {
         })
     }
 
-    consume(bytes) { return bytes.subarray(0, this.constructor.minBytesLength) }
+    consume(bytes, parameters = {}) { return bytes.subarray(0, this.constructor.minBytesLength) }
 
     toJSON() { return this.value == undefined ? null : this.value }
     toString() {
@@ -41,9 +41,9 @@ class TypeDef {
     }
     valueOf() { return this.value }
 
-    #consume(bytes, ...parameters) {
+    #consume(bytes, parameters = {}) {
         if (!this.constructor.isMinBytesInput(bytes)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
-        return this.consume(bytes, ...parameters)
+        return this.consume(bytes, parameters)
     }
 
 }
@@ -135,15 +135,13 @@ class opaque extends TypeDef {
         length ??= input.length
         if (mode !== 'variable') mode = 'fixed'
         const inputIsArray = Array.isArray(input)
-        super(input, length, mode, inputIsArray)
+        super(input, { length, mode, isValueInput: inputIsArray })
         if (mode === 'fixed' && inputIsArray && (input.length !== length)) throw new Error(`Fixed value length mismatch for ${this.constructor.name}: ${input.length}!= ${length}`)
-        Object.defineProperties(this, {
-            length: { value: length, enumerable: true },
-            mode: { value: mode, enumerable: true }
-        })
+        Object.defineProperties(this, { length: { value: length, enumerable: true }, mode: { value: mode, enumerable: true } })
     }
 
-    consume(bytes, length, mode, isValueInput) {
+    consume(bytes, parameters = {}) {
+        const { length, mode, isValueInput } = parameters
         if (isValueInput) return [this.constructor.serialize(bytes, this, mode, length), Array.from(bytes)]
         let consumeLength = Math.ceil(length / 4) * 4
         if (mode === 'variable') {
@@ -159,7 +157,7 @@ class opaque extends TypeDef {
 
 class string extends TypeDef {
 
-    #maxLength
+    #length
 
     static parameters = ['length']
     static deserialize(bytes) {
@@ -176,19 +174,21 @@ class string extends TypeDef {
         return bytes
     }
 
-    constructor(input, maxLength) {
+    constructor(input, parameters = {}) {
+        const { length } = parameters
         super(input, length)
-        this.#maxLength = maxLength
+        this.#length = length
     }
 
-    consume(bytes, maxLength) {
+    consume(bytes, parameters = {}) {
+        const { length } = parameters
         const stringLength = this.constructor.getView(bytes).getUint32(0, false), consumeLength = Math.ceil(stringLength / 4) * 4
-        if (maxLength && (stringLength > maxLength)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${stringLength}`)
+        if (length && (stringLength > length)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${stringLength}`)
         if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
         return bytes.subarray(0, 4 + consumeLength)
     }
 
-    get maxLength() { return this.#maxLength }
+    get length() { return this.#length }
 
 }
 
@@ -404,7 +404,7 @@ const BaseClass = class extends TypeDef {
         return raw ? result : result.value
     }
 
-    consume(bytes) {
+    consume(bytes, parameters = {}) {
         const newBytes = bytes.slice(0), testValue = this.constructor.deserialize(newBytes, undefined, undefined, true)
         this.value ??= testValue.value
         return bytes.subarray(0, testValue.bytes.byteLength)
@@ -521,7 +521,7 @@ const XDR = {
     },
     stringify: function (value, typedef, arrayLength, arrayMode) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, arrayLength, arrayMode))) },
 
-    import: async function (typeCollection = {}, options = {}, defaultOptions = {}, format = undefined) {
+    import: async function (typeCollection = {}, options = {}, namespace = undefined, format = undefined) {
         if (typeof typeCollection === 'string') {
             typeCollection = typeCollection.trim()
             if (typeCollection[0] === '/' || typeCollection[0] === '.' || typeCollection.endsWith('.xdr') || typeCollection.endsWith('.json') || typeCollection.includes('.') || typeCollection.includes(':')) {
@@ -539,11 +539,9 @@ const XDR = {
         }
         if (!typeCollection || (typeof typeCollection !== 'object')) throw new Error('typeCollection must be an object')
         if (typeof options !== 'object') throw new Error('options must be an object')
-        if (typeof defaultOptions !== 'object') throw new Error('defaultOptions must be an object')
         const { library, types } = typeCollection
         if (!library || !(library instanceof Object)) throw new Error('typeCollection.library must be an object')
         if (!types || !Array.isArray(types)) throw new Error('typeCollection.types must be an array')
-
         if (library.enums) {
             for (const en of library.enums) {
                 const body = []
@@ -585,7 +583,7 @@ const XDR = {
             const manifest = { entry, name, namespace }
             manifest.name ??= ((options[key] ?? {}).name ?? key)
             manifest.entry ??= ((options[key] ?? {}).entry ?? key)
-            manifest.namespace ??= ((options[key] ?? {}).namespace ?? defaultOptions.namespace ?? undefined)
+            manifest.namespace ??= ((options[key] ?? {}).namespace ?? namespace)
             for (const scope in library) {
                 manifest[scope] = {}
                 for (const typeName of (manifestSummary[scope] ?? [])) if (library[scope][typeName]) manifest[scope][typeName] = library[scope][typeName]

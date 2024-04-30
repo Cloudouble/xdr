@@ -155,7 +155,7 @@
                 const transactionEnvelope = XDR.parse(sourceElement.value || sourceElement.getAttribute('placeholder'), XDR.types.stellar.TransactionEnvelope)
                 stellarParseElement.querySelector('pre').textContent = JSON.stringify(transactionEnvelope, (k, v) => typeof v === 'bigint' ? v.toString() : v, 4)
                 stellarStringifyElement.querySelector('pre').textContent = XDR.stringify(transactionEnvelope, XDR.types.stellar.TransactionEnvelope)
-                console.log('transactionEnvelope value: ', transactionEnvelope, XDR.types.stellar.TransactionEnvelope.manifest)
+                console.log('transactionEnvelope value: ', transactionEnvelope)
                 window.transactionEnvelope = XDR.parse(sourceElement.value || sourceElement.getAttribute('placeholder'), XDR.types.stellar.TransactionEnvelope, undefined, undefined, true)
             }, sourceElement = stellarParseElement.querySelector('textarea')
         sourceElement.addEventListener('change', event => {
