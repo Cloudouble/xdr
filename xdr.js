@@ -260,10 +260,7 @@ const rx = {
     }
     return retval
 }, bool = createEnum([false, true], 'bool')
-Object.defineProperties(bool.prototype, {
-    valueOf: { value: function () { return !!this.value } },
-    toJSON: { value: function () { return !!this.value } }
-})
+Object.defineProperties(bool.prototype, { valueOf: { value: function () { return !!this.value } }, toJSON: { value: function () { return !!this.value } } })
 
 const BaseClass = class extends TypeDef {
 
@@ -272,10 +269,15 @@ const BaseClass = class extends TypeDef {
     static namespace
     static manifest = {}
     static serialize(value, instance, declaration) {
-        let type = declaration?.type ?? this.manifest.entry, result
+        const type = declaration?.type ?? this.manifest.entry
+        let result
+        if (!type) throw new Error(`No type found in declaration`)
+        if (type in this.manifest.enums) return (new (createEnum(this.manifest.enums[type], type))(value)).bytes
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
+        if (!declaration) throw new Error(`No type declaration found for type ${type}`)
+        const { arm, identifier, parameters = declaration } = declaration //remove ' = declaration' overload from LHS
         const runSerialize = (v, cb) => {
-            if (((declaration.mode === 'variable') || declaration.length) && Array.isArray(v)) {
+            if (((parameters.mode === 'variable') || parameters.length) && Array.isArray(v)) {
                 let totalLength = 0
                 const chunks = [[new int(v.length).bytes, totalLength]]
                 totalLength += 4
@@ -287,27 +289,25 @@ const BaseClass = class extends TypeDef {
             return cb(v)
         }
         if (type in XDR.types._core) {
-            result = (new XDR.types._core[type](value, ...XDR.types._core[type].parameters.map(a => declaration[a]))).bytes
+            result = (new XDR.types._core[type](value, ...XDR.types._core[type].parameters.map(a => parameters[a]))).bytes
         } else if (type in this.manifest.typedefs) {
             result = this.manifest.typedefs[type].type === 'opaque' ? this.serialize(value, undefined, { ...this.manifest.typedefs[type] })
-                : runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], mode: undefined, length: undefined }))
-        } else if (type in this.manifest.enums) {
-            result = (new (createEnum(this.manifest.enums[type], type))(value)).bytes
+                : runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], parameters: { mode: 'fixed', length: 0 } }))
         } else if (type in this.manifest.structs) {
             result = runSerialize(value, itemValue => {
                 const itemChunks = []
                 let itemTotalLength = 0
-                for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-                    const hasField = itemValue[identifier] !== undefined ? 1 : 0
-                    if (identifierDeclaration.optional) {
+                for (let [id, dec] of this.manifest.structs[type].entries()) {
+                    const hasField = itemValue[id] !== undefined ? 1 : 0, { parameters: p = dec } = dec // remove '= dec' overload from LHS
+                    if (p.optional) {
                         itemChunks.push([new Uint8Array([0, 0, 0, hasField]), itemTotalLength])
                         itemTotalLength += 4
                         if (!hasField) continue
-                        identifierDeclaration = { ...identifierDeclaration, optional: undefined }
+                        dec = { ...dec, parameters: { ...p, optional: false } }
                     } else {
-                        if (!hasField) throw new Error(`Missing required field in ${type}: ${identifier}`)
+                        if (!hasField) throw new Error(`Missing required field in ${type}: ${id}`)
                     }
-                    itemTotalLength += itemChunks[itemChunks.push([this.serialize(itemValue[identifier], undefined, identifierDeclaration), itemTotalLength]) - 1][0].length
+                    itemTotalLength += itemChunks[itemChunks.push([this.serialize(itemValue[id], undefined, dec), itemTotalLength]) - 1][0].length
                 }
                 const itemResult = new Uint8Array(itemTotalLength)
                 for (const chunk of itemChunks) itemResult.set(...chunk)
@@ -329,43 +329,49 @@ const BaseClass = class extends TypeDef {
 
     static deserialize(bytes, instance, declaration, raw, isArrayItem) {
         const type = declaration?.type ?? this.manifest.entry
+        let result
+        if (!type) throw new Error(`No type found in declaration`)
+        if (type in this.manifest.enums) {
+            result = new (createEnum(this.manifest.enums[type], type))(bytes)
+            return raw ? result : result.identifier
+        }
+        declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
+        if (!declaration) throw new Error(`No type declaration found for type ${type}`)
+        const { arm, identifier, parameters = declaration } = declaration //remove ' = declaration' overload from LHS
         const runDeserialize = (b, bl, d, iai) => {
             const r = this.deserialize(b, undefined, d, true, iai)
             return [bl + r.bytes.byteLength, (d.type === 'bool' || d.type in this.manifest.enums) ? r.identifier : r.value, b.subarray(r.bytes.byteLength)]
         }
-        declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
-        let result
         if (type in XDR.types._core) {
-            result = (new XDR.types._core[type](bytes, ...XDR.types._core[type].parameters.map(a => declaration[a])))
+            result = (new XDR.types._core[type](bytes, ...XDR.types._core[type].parameters.map(a => parameters[a])))
             return raw ? result : result[type === 'bool' ? 'identifier' : 'value']
         } else if (type in this.manifest.typedefs) {
             result = this.deserialize(bytes, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
-        } else if (type in this.manifest.enums) {
-            result = new (createEnum(this.manifest.enums[type], type))(bytes)
-            return raw ? result : result.identifier
         } else if (type in this.manifest.structs) {
             const value = {}
             let byteLength = 0, entryResult
-            for (let [identifier, identifierDeclaration] of this.manifest.structs[type].entries()) {
-                const { length: declarationLength, mode: declarationMode, type: declarationType, optional: declarationOptional } = identifierDeclaration
-                if (declarationOptional) {
+            for (let [id, dec] of this.manifest.structs[type].entries()) {
+                const p = dec.parameters ?? dec // remove overload
+                const declarationType = dec.type
+                const { length: declarationLength, mode: declarationMode, optional: declarationOptional } = p
+                if (p.optional) {
                     const hasField = !!this.getView(bytes).getUint32(0, false)
                     bytes = bytes.subarray(4)
                     byteLength += 4
                     if (!hasField) continue
                 }
-                if (((declarationMode === 'variable') || declarationLength) && !XDR.types._core[declarationType]) {
-                    const declarationVariableLength = declarationMode === 'variable' ? this.getView(bytes).getUint32(0, false) : declarationLength
-                    if (declarationMode === 'variable') {
-                        if (declarationVariableLength > declarationLength) throw new Error('Variable length exceeds declaration length')
+                if (((p.mode === 'variable') || p.length) && !XDR.types._core[dec.type]) {
+                    const declarationVariableLength = p.mode === 'variable' ? this.getView(bytes).getUint32(0, false) : p.length
+                    if (p.mode === 'variable') {
+                        if (declarationVariableLength > p.length) throw new Error('Variable length exceeds declaration length')
                         bytes = bytes.subarray(4)
                         byteLength += 4
                     }
                     entryResult = new Array(declarationVariableLength)
-                    for (const i of entryResult.keys()) [byteLength, entryResult[i], bytes] = runDeserialize(bytes, byteLength, { ...identifierDeclaration, length: undefined, mode: undefined }, true)
-                    value[identifier] = entryResult
+                    for (const i of entryResult.keys()) [byteLength, entryResult[i], bytes] = runDeserialize(bytes, byteLength, { ...dec, parameters: { ...p, length: 0, mode: 'fixed' } }, true)
+                    value[id] = entryResult
                 } else {
-                    [byteLength, value[identifier], bytes] = runDeserialize(bytes, byteLength, identifierDeclaration, true)
+                    [byteLength, value[id], bytes] = runDeserialize(bytes, byteLength, dec, true)
                 }
             }
             result = { value, bytes: { byteLength } }
@@ -381,9 +387,10 @@ const BaseClass = class extends TypeDef {
                 discriminantInstance = new enumClass(0)
                 armDeclaration = unionManifest.arms[discriminantInstance.identifier]
             }
-            if (isArrayItem) armDeclaration = { ...armDeclaration, length: undefined, mode: undefined }
+            if (isArrayItem) armDeclaration = { ...armDeclaration, parameters: { ...(armDeclaration.parameters ?? {}), length: 0, mode: 'fixed' } }
             const value = { [unionManifest.discriminant.identifier]: discriminantInstance.identifier },
-                { length: armLength, mode: armMode, type: armType, identifier } = armDeclaration
+                { identifier, type: armType } = armDeclaration,
+                { length: armLength, mode: armMode } = armDeclaration.parameters ?? armDeclaration // remove overload
             if (armLength && !(armType in !XDR.types._core)) {
                 const armVariableLength = armMode === 'variable' ? this.getView(bytes).getUint32(0, false) : armLength
                 if (armMode === 'variable') {
@@ -392,7 +399,8 @@ const BaseClass = class extends TypeDef {
                     if (armVariableLength > armLength) throw new Error('Variable length exceeds arm declaration length')
                 }
                 armResult = new Array(armVariableLength)
-                for (const i of armResult.keys()) [byteLength, armResult[i], bytes] = runDeserialize(bytes, byteLength, { ...armDeclaration, length: undefined, mode: undefined }, true)
+                for (const i of armResult.keys()) [byteLength, armResult[i], bytes] = runDeserialize(bytes, byteLength,
+                    { ...armDeclaration, parameters: { ...(armDeclaration.parameters ?? {}), length: 0, mode: 'fixed' } }, true)
                 if (identifier) value[identifier] = armResult
             } else {
                 let r
@@ -437,6 +445,8 @@ const BaseClass = class extends TypeDef {
 }
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
+const defaultParameters = { length: 0, mode: 'fixed', optional: false, unsigned: false }, parameters = { ...defaultParameters, mode: 'variable' },
+    unsignedParameters = { ...defaultParameters, unsigned: true }, optionalParameters = { ...defaultParameters, optional: true }
 class TypeCollection extends BaseClass {
     static entry = 'TypeCollection'
     static name = 'TypeCollection'
@@ -444,26 +454,23 @@ class TypeCollection extends BaseClass {
     static manifest = {
         entry: 'TypeCollection', name: 'TypeCollection',
         structs: {
-            TypeCollection: new Map([['library', { type: 'TypeLibrary' }], ['types', { type: 'TypeEntry', mode: 'variable' }]]),
-            TypeLibrary: new Map([['enums', { type: 'EnumEntry', mode: 'variable' }], ['structs', { type: 'StructEntry', mode: 'variable' }],
-            ['typedefs', { type: 'TypeDefEntry', mode: 'variable' }], ['unions', { type: 'UnionEntry', mode: 'variable' }]]),
-            EnumEntry: new Map([['key', { type: 'Name' }], ['body', { type: 'EnumPair', mode: 'variable' }]]),
-            EnumPair: new Map([['value', { type: 'int', unsigned: true }], ['identifier', { type: 'Name' }]]),
-            StructEntry: new Map([['key', { type: 'Name' }], ['properties', { type: 'PropertyParameters', mode: 'variable' }]]),
-            PropertyParameters: new Map([['type', { type: 'Name' }], ['identifier', { type: 'Name' }], ['parameters', { type: 'Parameters', optional: true }]]),
-            Parameters: new Map([['length', { type: 'int', unsigned: true }], ['mode', { type: 'LengthMode' }], ['optional', { type: 'bool' }], ['unsigned', { type: 'bool' }]]),
+            TypeCollection: new Map([['library', { type: 'TypeLibrary' }], ['types', { type: 'TypeEntry', parameters }]]),
+            TypeLibrary: new Map([['enums', { type: 'EnumEntry', parameters }], ['structs', { type: 'StructEntry', parameters }], ['typedefs', { type: 'TypeDefEntry', parameters }], ['unions', { type: 'UnionEntry', parameters }]]),
+            EnumEntry: new Map([['key', { type: 'Name' }], ['body', { type: 'EnumPair', parameters }]]),
+            EnumPair: new Map([['value', { type: 'int', parameters: unsignedParameters }], ['identifier', { type: 'Name' }]]),
+            StructEntry: new Map([['key', { type: 'Name' }], ['properties', { type: 'PropertyParameters', parameters }]]),
+            PropertyParameters: new Map([['type', { type: 'Name' }], ['identifier', { type: 'Name' }], ['parameters', { type: 'Parameters', parameters: optionalParameters }]]),
+            Parameters: new Map([['length', { type: 'int', parameters: unsignedParameters }], ['mode', { type: 'LengthMode' }], ['optional', { type: 'bool' }], ['unsigned', { type: 'bool' }]]),
             TypeDefEntry: new Map([['key', { type: 'Name' }], ['declaration', { type: 'TypeParameters' }]]),
-            TypeParameters: new Map([['type', { type: 'Name', }], ['parameters', { type: 'Parameters', optional: true }]]),
-            UnionEntry: new Map([['key', { type: 'Name' }], ['discriminant', { type: 'Discriminant' }], ['arms', { type: 'ArmParameters', mode: 'variable' }]]),
+            TypeParameters: new Map([['type', { type: 'Name', }], ['parameters', { type: 'Parameters', parameters: optionalParameters }]]),
+            UnionEntry: new Map([['key', { type: 'Name' }], ['discriminant', { type: 'Discriminant' }], ['arms', { type: 'ArmParameters', parameters }]]),
             Discriminant: new Map([['type', { type: 'Name' }], ['identifier', { type: 'Name' }]]),
-            ArmParameters: new Map([['type', { type: 'Name' }], ['arm', { type: 'Name' }],
-            ['identifier', { type: 'Name', optional: true }], ['parameters', { type: 'Parameters', optional: true }]]),
+            ArmParameters: new Map([['type', { type: 'Name' }], ['arm', { type: 'Name' }], ['identifier', { type: 'Name', parameters: optionalParameters }], ['parameters', { type: 'Parameters', parameters: optionalParameters }]]),
             TypeEntry: new Map([['key', { type: 'Name' }], ['manifest', { type: 'TypeManifest' }]]),
-            TypeManifest: new Map([['entry', { type: 'Name' }], ['enums', { type: 'Name', mode: 'variable' }], ['name', { type: 'Name' }],
-            ['structs', { type: 'Name', mode: 'variable' }], ['typedefs', { type: 'Name', mode: 'variable' }], ['unions', { type: 'Name', mode: 'variable' }]])
+            TypeManifest: new Map([['entry', { type: 'Name' }], ['enums', { type: 'Name', parameters }], ['name', { type: 'Name' }], ['structs', { type: 'Name', parameters }], ['typedefs', { type: 'Name', parameters }], ['unions', { type: 'Name', parameters }]])
         },
         unions: {},
-        typedefs: { Name: { type: 'string', mode: 'variable', identifier: 'Name' } },
+        typedefs: { Name: { type: 'string', parameters } },
         enums: { LengthMode: ['fixed', 'variable'] }
     }
 }
