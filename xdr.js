@@ -619,7 +619,12 @@ const XDR = {
                     optional = identifierHasStar || typeHasStar
                 if (identifierHasStar) identifier = identifier.slice(1)
                 if (typeHasStar) type = type.slice(0, -1)
-                if (type === 'void') return { type, length, mode, identifier, optional }
+                if (type === 'void') {
+                    const voidReturn = { type }
+                    if (identifier) voidReturn.identifier = identifier
+                    if (optional) voidReturn.parameters = { ...defaultParameters, optional }
+                    return voidReturn
+                }
                 const identifierIndexOfLt = identifier.indexOf('<'), identifierIndexOfGt = identifier.indexOf('>'),
                     identifierIndexOfBracketStart = identifier.indexOf('['), identifierIndexOfBracketEnd = identifier.indexOf(']')
                 if ((identifierIndexOfLt > 0) && (identifierIndexOfLt < identifierIndexOfGt)) {
@@ -634,8 +639,13 @@ const XDR = {
                     mode = 'fixed'
                 }
                 const parameters = {}, rawParameters = { length, mode, optional, unsigned }
-                for (const param of ['length', 'mode', 'optional', 'unsigned']) if (rawParameters[param] !== defaultParameters[param]) parameters[param] = rawParameters[param]
-                return { type, identifier, parameters }
+                for (const param of ['length', 'mode', 'optional', 'unsigned']) {
+                    if ((rawParameters[param] !== undefined) && (rawParameters[param] !== defaultParameters[param])) parameters[param] = rawParameters[param]
+                }
+                const retval = { type }
+                if (identifier) retval.identifier = identifier
+                if (Object.keys(parameters).length) retval.parameters = parameters
+                return retval
             }
             name ??= entry
             const constants = {}, enums = {}, structs = {}, unions = {}, typedefs = {}, cleanXCode = (s, r = '') => xCode.replace(s, r).replace(rx.blankLines, '').trim()
@@ -646,13 +656,10 @@ const XDR = {
             }
             for (const t of xCode.matchAll(rx.typedef)) {
                 const declaration = parseTypeLengthModeIdentifier(t[2] ? `${t[2]} ${t[3]} ${t[4]}` : `${t[3]} ${t[4]}`, constants)
-                typedefs[declaration.identifier] = declaration
+                const identifier = declaration.identifier
                 delete declaration.identifier
-                if (Object.keys(declaration.parameters).length) {
-                    declaration.parameters = { ...defaultParameters, ...declaration.parameters }
-                } else {
-                    delete declaration.parameters
-                }
+                typedefs[identifier] = declaration
+                if (declaration.parameters) declaration.parameters = { ...defaultParameters, ...declaration.parameters }
                 xCode = cleanXCode(t[0])
             }
             for (const m of xCode.matchAll(rx.enum)) {
@@ -680,11 +687,7 @@ const XDR = {
                     if (!propertyDeclaration.type || !propertyDeclaration.identifier) throw new Error(`Struct ${structName} has invalid declaration: ${declaration};`)
                     const propertyIdentifier = propertyDeclaration.identifier
                     delete propertyDeclaration.identifier
-                    if (Object.keys(propertyDeclaration.parameters).length) {
-                        propertyDeclaration.parameters = { ...defaultParameters, ...propertyDeclaration.parameters }
-                    } else {
-                        delete propertyDeclaration.parameters
-                    }
+                    if (propertyDeclaration.parameters) propertyDeclaration.parameters = { ...defaultParameters, ...propertyDeclaration.parameters }
                     map.set(propertyIdentifier, propertyDeclaration)
                 }
                 return [structName, map]
