@@ -305,7 +305,7 @@ const BaseClass = class extends TypeDef {
                         if (!hasField) continue
                         dec = { ...dec, parameters: { ...p, optional: false } }
                     } else {
-                        if (!hasField) throw new Error(`Missing required field in ${type}: ${id}`)
+                        if (!hasField) throw new Error(`Missing required field in ${type}: ${id}, ${JSON.stringify(itemValue)}`)
                     }
                     itemTotalLength += itemChunks[itemChunks.push([this.serialize(itemValue[id], undefined, dec), itemTotalLength]) - 1][0].length
                 }
@@ -477,7 +477,7 @@ class TypeCollection extends BaseClass {
 
 const XDR = {
     version: '1.1.9',
-    types: { _anon: {}, _base: { TypeDef, BaseClass }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
+    types: { _anon: {}, _base: { TypeDef, BaseClass, TypeCollection }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
     options: {
         includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
         libraryKey: '__library__', cacheExpiry: 10000
@@ -716,6 +716,7 @@ const XDR = {
                         default:
                             arms[discriminantIdentifier] = parseTypeLengthModeIdentifier(armDeclaration, constants)
                             arms[discriminantIdentifier].arm = discriminantIdentifier
+                            if (arms[discriminantIdentifier].parameters) arms[discriminantIdentifier].parameters = { ...defaultParameters, ...arms[discriminantIdentifier].parameters }
                     }
                     if (queuedArms.length) for (const d of queuedArms) arms[d] = { ...arms[discriminantIdentifier] }
                     queuedArms.length = 0
@@ -830,7 +831,9 @@ const XDR = {
             })
             for (const key in manifest.structs) {
                 const properties = []
-                for (const property of manifest.structs[key]) properties.push(property)
+                for (const property of manifest.structs[key]) {
+                    properties.push({ ...property[1], identifier: property[0] })
+                }
                 typeCollection.library.structs.push({ key, properties })
             }
             for (const key in manifest.typedefs) {

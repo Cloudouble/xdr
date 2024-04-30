@@ -23,46 +23,48 @@
             {
                 "key": "file",
                 "properties": [
-                    {
-                        "type": "string",
-                        "identifier": "filename",
-                        "parameters": {
-                            "length": 255,
-                            "mode": "variable",
-                            "optional": false,
-                            "unsigned": false
+                    [
+                        "filename",
+                        {
+                            "type": "string",
+                            "parameters": {
+                                "length": 255,
+                                "mode": "variable",
+                                "optional": false,
+                                "unsigned": false
+                            }
                         }
-                    },
-                    {
-                        "type": "filetype",
-                        "identifier": "type",
-                        "parameters": {
-                            "length": 0,
-                            "mode": "fixed",
-                            "optional": false,
-                            "unsigned": false
+                    ],
+                    [
+                        "type",
+                        {
+                            "type": "filetype"
                         }
-                    },
-                    {
-                        "type": "string",
-                        "identifier": "owner",
-                        "parameters": {
-                            "length": 32,
-                            "mode": "variable",
-                            "optional": false,
-                            "unsigned": false
+                    ],
+                    [
+                        "owner",
+                        {
+                            "type": "string",
+                            "parameters": {
+                                "length": 32,
+                                "mode": "variable",
+                                "optional": false,
+                                "unsigned": false
+                            }
                         }
-                    },
-                    {
-                        "type": "opaque",
-                        "identifier": "data",
-                        "parameters": {
-                            "length": 65535,
-                            "mode": "variable",
-                            "optional": false,
-                            "unsigned": false
+                    ],
+                    [
+                        "data",
+                        {
+                            "type": "opaque",
+                            "parameters": {
+                                "length": 65535,
+                                "mode": "variable",
+                                "optional": false,
+                                "unsigned": false
+                            }
                         }
-                    }
+                    ]
                 ]
             }
         ],
@@ -77,35 +79,25 @@
                 "arms": [
                     {
                         "type": "void",
-                        "arm": "TEXT",
-                        "parameters": {
-                            "length": 0,
-                            "mode": "fixed",
-                            "optional": false,
-                            "unsigned": false
-                        }
+                        "arm": "TEXT"
                     },
                     {
                         "type": "string",
-                        "arm": "DATA",
                         "identifier": "creator",
                         "parameters": {
                             "length": 255,
-                            "mode": "variable",
-                            "optional": false,
-                            "unsigned": false
-                        }
+                            "mode": "variable"
+                        },
+                        "arm": "DATA"
                     },
                     {
                         "type": "string",
-                        "arm": "EXEC",
                         "identifier": "interpretor",
                         "parameters": {
                             "length": 255,
-                            "mode": "variable",
-                            "optional": false,
-                            "unsigned": false
-                        }
+                            "mode": "variable"
+                        },
+                        "arm": "EXEC"
                     }
                 ]
             }
