@@ -34,7 +34,11 @@ class TypeDef {
     consume(bytes) { return bytes.subarray(0, this.constructor.minBytesLength) }
 
     toJSON() { return this.value == undefined ? null : this.value }
-    toString() { return btoa(String.fromCharCode.apply(null, this.bytes)) }
+    toString() {
+        const chunkSize = 32768, chunks = [];
+        for (let i = 0; i < this.bytes.length; i += chunkSize) chunks.push(String.fromCharCode.apply(null, this.bytes.slice(i, i + chunkSize)));
+        return btoa(chunks.join(''))
+    }
     valueOf() { return this.value }
 
     #consume(bytes, ...parameters) {
