@@ -23,48 +23,40 @@
             {
                 "key": "file",
                 "properties": [
-                    [
-                        "filename",
-                        {
-                            "type": "string",
-                            "parameters": {
-                                "length": 255,
-                                "mode": "variable",
-                                "optional": false,
-                                "unsigned": false
-                            }
-                        }
-                    ],
-                    [
-                        "type",
-                        {
-                            "type": "filetype"
-                        }
-                    ],
-                    [
-                        "owner",
-                        {
-                            "type": "string",
-                            "parameters": {
-                                "length": 32,
-                                "mode": "variable",
-                                "optional": false,
-                                "unsigned": false
-                            }
-                        }
-                    ],
-                    [
-                        "data",
-                        {
-                            "type": "opaque",
-                            "parameters": {
-                                "length": 65535,
-                                "mode": "variable",
-                                "optional": false,
-                                "unsigned": false
-                            }
-                        }
-                    ]
+                    {
+                        "type": "string",
+                        "parameters": {
+                            "length": 255,
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
+                        },
+                        "identifier": "filename"
+                    },
+                    {
+                        "type": "filetype",
+                        "identifier": "type"
+                    },
+                    {
+                        "type": "string",
+                        "parameters": {
+                            "length": 32,
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
+                        },
+                        "identifier": "owner"
+                    },
+                    {
+                        "type": "opaque",
+                        "parameters": {
+                            "length": 65535,
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
+                        },
+                        "identifier": "data"
+                    }
                 ]
             }
         ],
@@ -86,7 +78,9 @@
                         "identifier": "creator",
                         "parameters": {
                             "length": 255,
-                            "mode": "variable"
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
                         },
                         "arm": "DATA"
                     },
@@ -95,7 +89,9 @@
                         "identifier": "interpretor",
                         "parameters": {
                             "length": 255,
-                            "mode": "variable"
+                            "mode": "variable",
+                            "optional": false,
+                            "unsigned": false
                         },
                         "arm": "EXEC"
                     }
