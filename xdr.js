@@ -341,7 +341,7 @@ const BaseClass = class extends TypeDef {
         }
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         if (!declaration) throw new Error(`No type declaration found for type ${type}`)
-        const { arm, identifier, parameters = declaration } = declaration //remove ' = declaration' overload from LHS
+        const { arm, identifier, parameters = { ...defaultParameters } } = declaration
         const runDeserialize = (b, bl, d, iai) => {
             const r = this.deserialize(b, undefined, d, true, iai)
             return [bl + r.bytes.byteLength, r[r.constructor.valueProperty ?? 'value'], b.subarray(r.bytes.byteLength)]
@@ -355,7 +355,7 @@ const BaseClass = class extends TypeDef {
             const value = {}
             let byteLength = 0, entryResult
             for (let [id, dec] of this.manifest.structs[type].entries()) {
-                const p = dec.parameters ?? dec // remove overload
+                const p = dec.parameters ?? { ...defaultParameters }
                 if (p.optional) {
                     const hasField = !!this.getView(bytes).getUint32(0, false)
                     bytes = bytes.subarray(4)
@@ -392,7 +392,7 @@ const BaseClass = class extends TypeDef {
             if (isArrayItem) armDeclaration = { ...armDeclaration, parameters: { ...(armDeclaration.parameters ?? {}), length: 0, mode: 'fixed' } }
             const value = { [unionManifest.discriminant.identifier]: discriminantInstance.identifier },
                 { identifier, type: armType } = armDeclaration,
-                { length: armLength, mode: armMode } = armDeclaration.parameters ?? armDeclaration // remove overload
+                { length: armLength, mode: armMode } = armDeclaration.parameters ?? { ...defaultParameters }
             if (armLength && !(armType in !XDR.types._core)) {
                 const armVariableLength = armMode === 'variable' ? this.getView(bytes).getUint32(0, false) : armLength
                 if (armMode === 'variable') {
