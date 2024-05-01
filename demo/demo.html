@@ -98,29 +98,27 @@
 
         const show = (v) => JSON.stringify(Array.from(v))
 
-        const instance1 = Array.isArray(entry) ? new XDR.types._core[entry[0]](bytes, ...entry.slice(1)) : new XDR.types.stellar[entry](bytes)
+        const instance1 = new XDR.types.stellar[entry](bytes)
         console.log(entry, 'instance1: ', instance1)
 
-        const instance2 = Array.isArray(entry) ? new XDR.types._core[entry[0]](instance1.value, ...entry.slice(1)) : new XDR.types.stellar[entry](instance1.value)
+        const instance2 = new XDR.types.stellar[entry](instance1.value)
         console.log(entry, 'instance2: ', instance2)
 
-        const instance3 = Array.isArray(entry) ? new XDR.types._core[entry[0]](instance2.bytes, ...entry.slice(1)) : new XDR.types.stellar[entry](instance2.bytes)
+        const instance3 = new XDR.types.stellar[entry](instance2.bytes)
         console.log(entry, 'instance3: ', instance3)
-
 
         console.log('%s %s %c%s %c%s', entry, 'instances 1,2 & 3 same bytes: ', 'color: green;', show(instance1.bytes) === show(instance2.bytes), 'color: green;', show(instance2.bytes) === show(instance3.bytes))
         try { console.log('%s %s %c%s %c%s', entry, 'instances 1,2 & 3 same values: ', 'color: green;', JSON.stringify(instance1.value) === JSON.stringify(instance2.value), 'color: green;', JSON.stringify(instance2.value) === JSON.stringify(instance3.value)) } catch (e) { }
 
-
         try {
             const instance1JSON = JSON.parse(JSON.stringify(instance1.value))
-            const instance4 = Array.isArray(entry) ? new XDR.types._core[entry[0]](instance1JSON, ...entry.slice(1)) : new XDR.types.stellar[entry](instance1JSON)
+            const instance4 = new XDR.types.stellar[entry](instance1JSON)
             console.log(entry, 'instance4: ', instance4)
             console.log('%s %s %c%s', entry, 'instances 1 & 4 same bytes: ', 'color: green;', show(instance1.bytes) === show(instance4.bytes))
         } catch (e) { }
 
-        const value5 = XDR.deserialize(bytes, Array.isArray(entry) ? XDR.types._core[entry[0]] : XDR.types.stellar[entry], ...(Array.isArray(entry) ? entry.slice(1) : []))
-        const bytes5 = XDR.serialize(value5, Array.isArray(entry) ? XDR.types._core[entry[0]] : XDR.types.stellar[entry], ...(Array.isArray(entry) ? entry.slice(1) : []))
+        const value5 = XDR.deserialize(bytes, XDR.types.stellar[entry])
+        const bytes5 = XDR.serialize(value5, XDR.types.stellar[entry])
 
         console.log(entry, 'value5: ', value5)
         console.log(entry, 'bytes5: ', bytes5)

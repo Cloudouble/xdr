@@ -27,7 +27,7 @@ class TypeDef {
             throw new Error(`Invalid input for ${this.constructor.name}: ${input}`)
         }
         Object.defineProperties(this, {
-            bytes: { get: () => this.#bytes ??= this.constructor.serialize(this.#value, this), enumerable: true },
+            bytes: { get: () => this.#bytes ??= this.constructor.serialize(this.#value), enumerable: true },
             value: { get: () => this.#value ??= this.constructor.deserialize(this.#bytes, this), enumerable: true }
         })
     }
@@ -119,9 +119,8 @@ class opaque extends TypeDef {
         return data
     }
     static isValueInput(input) { return Array.isArray(input) }
-    static serialize(value, instance, length, mode) {
-        mode ??= instance.mode
-        length ??= instance.length
+    static serialize(value, parameters = {}) {
+        const { length = this.length, mode = this.mode } = parameters
         const bytes = new Uint8Array(Math.ceil((mode === 'fixed' ? length : (4 + value.length)) / 4) * 4)
         if (mode === 'variable') {
             const view = this.getView(4)
@@ -143,7 +142,7 @@ class opaque extends TypeDef {
 
     consume(bytes, parameters = {}) {
         const { length, mode, isValueInput } = parameters
-        if (isValueInput) return [this.constructor.serialize(bytes, this, mode, length), Array.from(bytes)]
+        if (isValueInput) return [this.constructor.serialize(bytes, { mode, length }), Array.from(bytes)]
         let consumeLength = Math.ceil(length / 4) * 4
         if (mode === 'variable') {
             const valueLength = this.constructor.getView(bytes, 0, 4).getUint32(0, false)
@@ -264,20 +263,23 @@ const rx = {
 }, bool = createEnum([false, true], 'bool')
 Object.defineProperties(bool.prototype, { valueOf: { value: function () { return !!this.value } }, toJSON: { value: function () { return !!this.value } } })
 
+const defaultParameters = { length: 0, mode: 'fixed', optional: false, unsigned: false }, parameters = { ...defaultParameters, mode: 'variable' },
+    unsignedParameters = { ...defaultParameters, unsigned: true }, optionalParameters = { ...defaultParameters, optional: true }
+
 const BaseClass = class extends TypeDef {
 
     static entry
     static name
     static namespace
     static manifest = {}
-    static serialize(value, instance, declaration) {
+    static serialize(value, declaration) {
         const type = declaration?.type ?? this.manifest.entry
         let result
         if (!type) throw new Error(`No type found in declaration`)
         if (type in this.manifest.enums) return (new (createEnum(this.manifest.enums[type], type))(value)).bytes
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         if (!declaration) throw new Error(`No type declaration found for type ${type}`)
-        const { arm, identifier, parameters = declaration } = declaration //remove ' = declaration' overload from LHS
+        const { arm, identifier, parameters = { ...defaultParameters } } = declaration
         const runSerialize = (v, cb) => {
             if (((parameters.mode === 'variable') || parameters.length) && Array.isArray(v)) {
                 let totalLength = 0
@@ -293,14 +295,14 @@ const BaseClass = class extends TypeDef {
         if (type in XDR.types._core) {
             result = (new XDR.types._core[type](value, ...XDR.types._core[type].parameters.map(a => parameters[a]))).bytes
         } else if (type in this.manifest.typedefs) {
-            result = this.manifest.typedefs[type].type === 'opaque' ? this.serialize(value, undefined, { ...this.manifest.typedefs[type] })
-                : runSerialize(value, itemValue => this.serialize(itemValue, undefined, { ...this.manifest.typedefs[type], parameters: { mode: 'fixed', length: 0 } }))
+            result = this.manifest.typedefs[type].type === 'opaque' ? this.serialize(value, { ...this.manifest.typedefs[type] })
+                : runSerialize(value, itemValue => this.serialize(itemValue, { ...this.manifest.typedefs[type], parameters: { ...defaultParameters } }))
         } else if (type in this.manifest.structs) {
             result = runSerialize(value, itemValue => {
                 const itemChunks = []
                 let itemTotalLength = 0
                 for (let [id, dec] of this.manifest.structs[type].entries()) {
-                    const hasField = itemValue[id] !== undefined ? 1 : 0, { parameters: p = dec } = dec // remove '= dec' overload from LHS
+                    const hasField = itemValue[id] !== undefined ? 1 : 0, { parameters: p = { ...defaultParameters } } = dec
                     if (p.optional) {
                         itemChunks.push([new Uint8Array([0, 0, 0, hasField]), itemTotalLength])
                         itemTotalLength += 4
@@ -309,7 +311,7 @@ const BaseClass = class extends TypeDef {
                     } else {
                         if (!hasField) throw new Error(`Missing required field in ${type}: ${id}, ${JSON.stringify(itemValue)}`)
                     }
-                    itemTotalLength += itemChunks[itemChunks.push([this.serialize(itemValue[id], undefined, dec), itemTotalLength]) - 1][0].length
+                    itemTotalLength += itemChunks[itemChunks.push([this.serialize(itemValue[id], dec), itemTotalLength]) - 1][0].length
                 }
                 const itemResult = new Uint8Array(itemTotalLength)
                 for (const chunk of itemChunks) itemResult.set(...chunk)
@@ -319,7 +321,7 @@ const BaseClass = class extends TypeDef {
             const unionManifest = this.manifest.unions[type], enumClass = createEnum(this.manifest.enums[unionManifest.discriminant.type], unionManifest.discriminant.type)
             result = runSerialize(value, itemValue => {
                 const enumIdentifier = itemValue[unionManifest.discriminant.identifier], discriminantBytes = (new enumClass(enumIdentifier)).bytes,
-                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], undefined, unionManifest.arms[enumIdentifier]),
+                    armManifest = unionManifest.arms[enumIdentifier], armBytes = this.serialize(itemValue[armManifest.identifier], unionManifest.arms[enumIdentifier]),
                     itemResult = new Uint8Array(discriminantBytes.length + armBytes.length)
                 itemResult.set(discriminantBytes, 0)
                 itemResult.set(armBytes, discriminantBytes.length)
@@ -445,8 +447,6 @@ const BaseClass = class extends TypeDef {
 }
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
-const defaultParameters = { length: 0, mode: 'fixed', optional: false, unsigned: false }, parameters = { ...defaultParameters, mode: 'variable' },
-    unsignedParameters = { ...defaultParameters, unsigned: true }, optionalParameters = { ...defaultParameters, optional: true }
 class TypeCollection extends BaseClass {
     static entry = 'TypeCollection'
     static name = 'TypeCollection'
