@@ -851,6 +851,49 @@ const XDR = {
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
         const typeCollectionInstance = new TypeCollection(typeCollection)
         return raw ? typeCollectionInstance : `${typeCollectionInstance}`
+    },
+
+    test: async function () {
+
+        const fileValue = { filename: "sillyprog", type: { kind: "EXEC", interpretor: "lisp" }, owner: "john", data: [0x28, 0x71, 0x75, 0x69, 0x74, 0x29] }
+        const File = await this.factory('file.x', 'file')
+        const FileKind = await this.factory('file.x', 'filekind')
+        const FileType = await this.factory('file.x', 'filetype')
+
+        const type = this.types._core.opaque
+        console.log('line 864: type: ', type.name, type.manifest)
+
+        const value = fileValue.data
+        console.log('line 867: value: ', value)
+
+        const bytes = this.serialize(value, type)
+        console.log('line 870: bytes: ', bytes)
+
+        const valueFromDeserialize = this.deserialize(bytes, type)
+        console.log('line 873: valueFromDeserialize: ', valueFromDeserialize)
+
+        const str = this.stringify(value, type)
+        console.log('line 876: str: ', str)
+
+        const valueFromParse = this.parse(str, type)
+        console.log('line 879: valueFromParse: ', valueFromParse)
+
+
+        // const transactionXDR = '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'
+        // const TransactionEnvelope = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', 'TransactionEnvelope')
+
+        // console.log('TransactionEnvelope: ', TransactionEnvelope.manifest)
+
+        // const transactionEnvelopeFromStringOriginal = this.parse(transactionXDR, TransactionEnvelope)
+
+        // console.log('transactionEnvelopeFromStringOriginal: ', transactionEnvelopeFromStringOriginal)
+
+        // const transactionXDRFromValue = this.stringify(transactionEnvelopeFromStringOriginal, TransactionEnvelope)
+
+        // console.log('transactionXDRFromValue: ', transactionXDRFromValue)
+
+        // console.log('transactionXDRFromValue === transactionXDR: ', transactionXDRFromValue === transactionXDR)
+
     }
 
 }
