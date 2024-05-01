@@ -6,6 +6,7 @@ class TypeDef {
     static parameters = []
     static isImplicitArray = false
     static minBytesLength = 0
+    static valueProperty = 'value'
     static deserialize(bytes) { return }
     static getView(i, byteOffset, byteLength) {
         if (typeof i === 'number') return new DataView(new ArrayBuffer(i))
@@ -33,13 +34,13 @@ class TypeDef {
 
     consume(bytes, parameters = {}) { return bytes.subarray(0, this.constructor.minBytesLength) }
 
-    toJSON() { return this.value == undefined ? null : this.value }
+    toJSON() { return this[this.constructor.valueProperty ?? 'value'] == undefined ? null : this[this.constructor.valueProperty ?? 'value'] }
     toString() {
         const chunkSize = 32768, chunks = [];
         for (let i = 0; i < this.bytes.length; i += chunkSize) chunks.push(String.fromCharCode.apply(null, this.bytes.slice(i, i + chunkSize)));
         return btoa(chunks.join(''))
     }
-    valueOf() { return this.value }
+    valueOf() { return this[this.constructor.valueProperty ?? 'value'] }
 
     #consume(bytes, parameters = {}) {
         if (!this.constructor.isMinBytesInput(bytes)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
@@ -219,6 +220,7 @@ const rx = {
         static name = name
         static namespace = namespace
         static manifest = manifest
+        static valueProperty = 'identifier'
 
         #body
         #identifier
@@ -340,7 +342,7 @@ const BaseClass = class extends TypeDef {
         const { arm, identifier, parameters = declaration } = declaration //remove ' = declaration' overload from LHS
         const runDeserialize = (b, bl, d, iai) => {
             const r = this.deserialize(b, undefined, d, true, iai)
-            return [bl + r.bytes.byteLength, (d.type === 'bool' || d.type in this.manifest.enums) ? r.identifier : r.value, b.subarray(r.bytes.byteLength)]
+            return [bl + r.bytes.byteLength, r[r.constructor.valueProperty ?? 'value'], b.subarray(r.bytes.byteLength)]
         }
         if (type in XDR.types._core) {
             result = (new XDR.types._core[type](bytes, ...XDR.types._core[type].parameters.map(a => parameters[a])))
@@ -409,7 +411,7 @@ const BaseClass = class extends TypeDef {
             }
             result = { value, bytes: { byteLength } }
         }
-        return raw ? result : result.value
+        return raw ? result : result[result.constructor.valueProperty ?? 'value']
     }
 
     consume(bytes, parameters = {}) {
@@ -439,7 +441,7 @@ const BaseClass = class extends TypeDef {
                     return r
             }
         }
-        return runToJson(this.value)
+        return runToJson(this[this.constructor.valueProperty ?? 'value'])
     }
 
 }
@@ -488,7 +490,7 @@ const XDR = {
         if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
         if (!length || typeDef.isImplicitArray) {
             const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [length, mode] : []))
-            return raw ? r : r.value
+            return raw ? r : r[r.constructor.valueProperty ?? 'value']
         }
         if (mode !== 'variable') mode = 'fixed'
         const arrayActualLength = mode === 'variable' ? typeDef.getView(bytes).getUint32(0, false) : length
@@ -499,7 +501,7 @@ const XDR = {
         const result = new Array(arrayActualLength)
         for (const i of result.keys()) {
             const r = new typeDef(bytes)
-            result[i] = raw ? r : r.value
+            result[i] = raw ? r : r[r.constructor.valueProperty ?? 'value']
             bytes = bytes.subarray(r.bytes.byteLength)
         }
         return result
@@ -852,7 +854,33 @@ const XDR = {
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
         const typeCollectionInstance = new TypeCollection(typeCollection)
         return raw ? typeCollectionInstance : `${typeCollectionInstance}`
+    },
+
+    test: async function () {
+        const typeCollection = await this.export('_anon', 'json', true)
+
+        const testTypeName = 'LengthMode'
+        const testType = await this.factory('../type-collection.x', testTypeName, { namespace: 'test' })
+
+        console.log('line 863: typeCollection: ', typeCollection)
+
+        console.log('line 865: testType: ', testTypeName, testType.manifest)
+
+        const testValue = typeCollection.library.structs[0].properties[0].parameters.mode
+
+        console.log('line 869: testValue: ', testValue)
+
+        const testSerialize = this.serialize(testValue, testType)
+
+        console.log('line 873: testSerialize', Array.from(testSerialize))
+
+        const testDeserialize = this.deserialize(testSerialize, testType)
+
+        console.log('line 877: testDeserialize', testDeserialize)
+
     }
+
+
 
 }
 Object.defineProperties(XDR, { createEnum: { value: createEnum }, _cache: { value: {} } })
