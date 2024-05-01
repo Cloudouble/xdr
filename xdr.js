@@ -580,10 +580,9 @@ const XDR = {
             library.unions = unions
         }
         for (const typeEntry of types) {
-            const { key, manifest: manifestSummary } = typeEntry, { entry, name, namespace } = manifestSummary
-            const manifest = { entry, name, namespace }
-            manifest.name ??= ((options[key] ?? {}).name ?? key)
-            manifest.entry ??= ((options[key] ?? {}).entry ?? key)
+            const { key, manifest: manifestSummary } = typeEntry, manifest = {}
+            manifest.name = ((options[key] ?? {}).name ?? key)
+            manifest.entry ??= ((options[key] ?? {}).entry ?? manifestSummary.entry ?? manifest.name)
             manifest.namespace ??= ((options[key] ?? {}).namespace ?? namespace)
             for (const scope in library) {
                 manifest[scope] = {}
