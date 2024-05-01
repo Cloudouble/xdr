@@ -354,8 +354,6 @@ const BaseClass = class extends TypeDef {
             let byteLength = 0, entryResult
             for (let [id, dec] of this.manifest.structs[type].entries()) {
                 const p = dec.parameters ?? dec // remove overload
-                const declarationType = dec.type
-                const { length: declarationLength, mode: declarationMode, optional: declarationOptional } = p
                 if (p.optional) {
                     const hasField = !!this.getView(bytes).getUint32(0, false)
                     bytes = bytes.subarray(4)
@@ -365,7 +363,7 @@ const BaseClass = class extends TypeDef {
                 if (((p.mode === 'variable') || p.length) && !XDR.types._core[dec.type]) {
                     const declarationVariableLength = p.mode === 'variable' ? this.getView(bytes).getUint32(0, false) : p.length
                     if (p.mode === 'variable') {
-                        if (declarationVariableLength > p.length) throw new Error('Variable length exceeds declaration length')
+                        if (p.length && (declarationVariableLength > p.length)) throw new Error('Variable length exceeds declaration length')
                         bytes = bytes.subarray(4)
                         byteLength += 4
                     }
@@ -854,33 +852,7 @@ const XDR = {
         if (format === 'json') return raw ? typeCollection : JSON.stringify(typeCollection)
         const typeCollectionInstance = new TypeCollection(typeCollection)
         return raw ? typeCollectionInstance : `${typeCollectionInstance}`
-    },
-
-    test: async function () {
-        const typeCollection = await this.export('_anon', 'json', true)
-
-        const testTypeName = 'LengthMode'
-        const testType = await this.factory('../type-collection.x', testTypeName, { namespace: 'test' })
-
-        console.log('line 863: typeCollection: ', typeCollection)
-
-        console.log('line 865: testType: ', testTypeName, testType.manifest)
-
-        const testValue = typeCollection.library.structs[0].properties[0].parameters.mode
-
-        console.log('line 869: testValue: ', testValue)
-
-        const testSerialize = this.serialize(testValue, testType)
-
-        console.log('line 873: testSerialize', Array.from(testSerialize))
-
-        const testDeserialize = this.deserialize(testSerialize, testType)
-
-        console.log('line 877: testDeserialize', testDeserialize)
-
     }
-
-
 
 }
 Object.defineProperties(XDR, { createEnum: { value: createEnum }, _cache: { value: {} } })
