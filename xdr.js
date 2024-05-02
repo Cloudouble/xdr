@@ -3,18 +3,17 @@ class TypeDef {
     #bytes
     #value
 
-    static parameters = []
     static isImplicitArray = false
     static minBytesLength = 0
     static valueProperty = 'value'
-    static deserialize(bytes) { return }
+    static deserialize(bytes, parameters = {}) { return }
     static getView(i, byteOffset, byteLength) {
         if (typeof i === 'number') return new DataView(new ArrayBuffer(i))
         if (i instanceof Uint8Array) return new DataView(i.buffer, i.byteOffset + (byteOffset ?? 0), byteLength ?? i.byteLength)
     }
     static isMinBytesInput(bytes) { return Number.isInteger(this.minBytesLength) ? (bytes.length >= this.minBytesLength) : true }
     static isValueInput(input) { return !(input instanceof Uint8Array) }
-    static serialize(value) { return new Uint8Array() }
+    static serialize(value, parameters = {}) { return new Uint8Array() }
 
     constructor(input, parameters = {}) {
         if (input instanceof Uint8Array) {
@@ -27,8 +26,8 @@ class TypeDef {
             throw new Error(`Invalid input for ${this.constructor.name}: ${input}`)
         }
         Object.defineProperties(this, {
-            bytes: { get: () => this.#bytes ??= this.constructor.serialize(this.#value), enumerable: true },
-            value: { get: () => this.#value ??= this.constructor.deserialize(this.#bytes, this), enumerable: true }
+            bytes: { get: () => this.#bytes ??= this.constructor.serialize(this.#value, parameters), enumerable: true },
+            value: { get: () => this.#value ??= this.constructor.deserialize(this.#bytes, parameters), enumerable: true }
         })
     }
 
@@ -112,8 +111,10 @@ class opaque extends TypeDef {
 
     static parameters = ['length', 'mode']
     static isImplicitArray = true
-    static deserialize(bytes, instance) {
-        if (instance.mode === 'fixed') return Array.from(bytes)
+    static deserialize(bytes, parameters = {}) {
+        if (parameters.mode !== 'variable') parameters.mode = 'fixed'
+        const { mode } = parameters
+        if (mode === 'fixed') return Array.from(bytes)
         const maxOffset = this.getView(bytes).getUint32(0, false) + 4, data = []
         for (let offset = 4; offset < maxOffset; offset++) data.push(bytes[offset])
         return data
@@ -131,12 +132,11 @@ class opaque extends TypeDef {
         return bytes
     }
 
-    constructor(input, length, mode) {
-        length ??= input.length
-        if (mode !== 'variable') mode = 'fixed'
-        const inputIsArray = Array.isArray(input)
-        super(input, { length, mode, isValueInput: inputIsArray })
-        if (mode === 'fixed' && inputIsArray && (input.length !== length)) throw new Error(`Fixed value length mismatch for ${this.constructor.name}: ${input.length}!= ${length}`)
+    constructor(input, parameters = {}) {
+        if (parameters.mode !== 'variable') parameters.mode = 'fixed'
+        const { length = input.length, mode } = parameters, isValueInput = Array.isArray(input)
+        super(input, { length, mode, isValueInput })
+        if (mode === 'fixed' && isValueInput && (input.length !== length)) throw new Error(`Fixed value length mismatch for ${this.constructor.name}: ${input.length}!= ${length}`)
         Object.defineProperties(this, { length: { value: length, enumerable: true }, mode: { value: mode, enumerable: true } })
     }
 
@@ -175,9 +175,8 @@ class string extends TypeDef {
     }
 
     constructor(input, parameters = {}) {
-        const { length } = parameters
-        super(input, length)
-        this.#length = length
+        super(input, parameters)
+        this.#length = parameters.length
     }
 
     consume(bytes, parameters = {}) {
@@ -293,7 +292,7 @@ const BaseClass = class extends TypeDef {
             return cb(v)
         }
         if (type in XDR.types._core) {
-            result = (new XDR.types._core[type](value, ...XDR.types._core[type].parameters.map(a => parameters[a]))).bytes
+            result = (new XDR.types._core[type](value, parameters)).bytes
         } else if (type in this.manifest.typedefs) {
             result = this.manifest.typedefs[type].type === 'opaque' ? this.serialize(value, { ...this.manifest.typedefs[type] })
                 : runSerialize(value, itemValue => this.serialize(itemValue, { ...this.manifest.typedefs[type], parameters: { ...defaultParameters } }))
@@ -331,7 +330,7 @@ const BaseClass = class extends TypeDef {
         return result
     }
 
-    static deserialize(bytes, instance, declaration, raw, isArrayItem) {
+    static deserialize(bytes, declaration, raw, isArrayItem) {
         const type = declaration?.type ?? this.manifest.entry
         let result
         if (!type) throw new Error(`No type found in declaration`)
@@ -343,14 +342,14 @@ const BaseClass = class extends TypeDef {
         if (!declaration) throw new Error(`No type declaration found for type ${type}`)
         const { arm, identifier, parameters = { ...defaultParameters } } = declaration
         const runDeserialize = (b, bl, d, iai) => {
-            const r = this.deserialize(b, undefined, d, true, iai)
+            const r = this.deserialize(b, d, true, iai)
             return [bl + r.bytes.byteLength, r[r.constructor.valueProperty ?? 'value'], b.subarray(r.bytes.byteLength)]
         }
         if (type in XDR.types._core) {
-            result = (new XDR.types._core[type](bytes, ...XDR.types._core[type].parameters.map(a => parameters[a])))
+            result = (new XDR.types._core[type](bytes, parameters))
             return raw ? result : result[type === 'bool' ? 'identifier' : 'value']
         } else if (type in this.manifest.typedefs) {
-            result = this.deserialize(bytes, undefined, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
+            result = this.deserialize(bytes, { ...this.manifest.typedefs[type], identifier: declaration.identifier }, true)
         } else if (type in this.manifest.structs) {
             const value = {}
             let byteLength = 0, entryResult
@@ -415,7 +414,7 @@ const BaseClass = class extends TypeDef {
     }
 
     consume(bytes, parameters = {}) {
-        const newBytes = bytes.slice(0), testValue = this.constructor.deserialize(newBytes, undefined, undefined, true)
+        const newBytes = bytes.slice(0), testValue = this.constructor.deserialize(newBytes, undefined, true)
         this.value ??= testValue.value
         return bytes.subarray(0, testValue.bytes.byteLength)
     }
@@ -487,7 +486,7 @@ const XDR = {
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
         if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
         if (!length || typeDef.isImplicitArray) {
-            const r = new typeDef(bytes, ...(typeDef.isImplicitArray ? [length, mode] : []))
+            const r = new typeDef(bytes, (typeDef.isImplicitArray ? { length, mode } : {}))
             return raw ? r : r[r.constructor.valueProperty ?? 'value']
         }
         if (mode !== 'variable') mode = 'fixed'
@@ -507,7 +506,7 @@ const XDR = {
     serialize: function (value, typeDef, parameters = {}) {
         const { length, mode } = parameters
         if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
-        if (!length || typeDef.isImplicitArray) return (new typeDef(value, ...(typeDef.isImplicitArray ? [length, mode] : []))).bytes
+        if (!length || typeDef.isImplicitArray) return (new typeDef(value, (typeDef.isImplicitArray ? { length, mode } : {}))).bytes
         if (!Array.isArray(value)) throw new Error('value must be an array')
         if (mode !== 'variable') mode = 'fixed'
         const arrayActualLength = mode === 'variable' ? value.length : length, chunks = []
@@ -860,22 +859,23 @@ const XDR = {
         const FileKind = await this.factory('file.x', 'filekind')
         const FileType = await this.factory('file.x', 'filetype')
 
-        const type = this.types._core.opaque
-        console.log('line 864: type: ', type.name, type.manifest)
+        const type = File
+        const parameters = {}
+        console.log('line 864: type, parameters, manifest: ', type.name, parameters, type.manifest)
 
-        const value = fileValue.data
+        const value = fileValue
         console.log('line 867: value: ', value)
 
-        const bytes = this.serialize(value, type)
+        const bytes = this.serialize(value, type, parameters)
         console.log('line 870: bytes: ', bytes)
 
-        const valueFromDeserialize = this.deserialize(bytes, type)
+        const valueFromDeserialize = this.deserialize(bytes, type, parameters)
         console.log('line 873: valueFromDeserialize: ', valueFromDeserialize)
 
-        const str = this.stringify(value, type)
+        const str = this.stringify(value, type, parameters)
         console.log('line 876: str: ', str)
 
-        const valueFromParse = this.parse(str, type)
+        const valueFromParse = this.parse(str, type, parameters)
         console.log('line 879: valueFromParse: ', valueFromParse)
 
 
