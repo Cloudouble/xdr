@@ -121,8 +121,8 @@ class opaque extends TypeDef {
     }
     static isValueInput(input) { return Array.isArray(input) }
     static serialize(value, parameters = {}) {
-        const { length = this.length, mode = this.mode } = parameters
-        const bytes = new Uint8Array(Math.ceil((mode === 'fixed' ? length : (4 + value.length)) / 4) * 4)
+        const { length = this.length, mode = this.mode } = parameters,
+            bytes = new Uint8Array(Math.ceil((mode === 'fixed' ? length : (4 + value.length)) / 4) * 4)
         if (mode === 'variable') {
             const view = this.getView(4)
             view.setUint32(0, value.length, false)
@@ -180,8 +180,7 @@ class string extends TypeDef {
     }
 
     consume(bytes, parameters = {}) {
-        const { length } = parameters
-        const stringLength = this.constructor.getView(bytes).getUint32(0, false), consumeLength = Math.ceil(stringLength / 4) * 4
+        const { length } = parameters, stringLength = this.constructor.getView(bytes).getUint32(0, false), consumeLength = Math.ceil(stringLength / 4) * 4
         if (length && (stringLength > length)) throw new Error(`Maximum length exceeded for ${this.constructor.name}: ${stringLength}`)
         if (bytes.length < (4 + consumeLength)) throw new Error(`Insufficient consumable byte length for ${this.constructor.name}: ${bytes.length}`)
         return bytes.subarray(0, 4 + consumeLength)
@@ -259,11 +258,9 @@ const rx = {
         }
     }
     return retval
-}, bool = createEnum([false, true], 'bool')
+}, defaultParameters = { length: 0, mode: 'fixed', optional: false, unsigned: false }, parameters = { ...defaultParameters, mode: 'variable' },
+    unsignedParameters = { ...defaultParameters, unsigned: true }, optionalParameters = { ...defaultParameters, optional: true }, bool = createEnum([false, true], 'bool')
 Object.defineProperties(bool.prototype, { valueOf: { value: function () { return !!this.value } }, toJSON: { value: function () { return !!this.value } } })
-
-const defaultParameters = { length: 0, mode: 'fixed', optional: false, unsigned: false }, parameters = { ...defaultParameters, mode: 'variable' },
-    unsignedParameters = { ...defaultParameters, unsigned: true }, optionalParameters = { ...defaultParameters, optional: true }
 
 const BaseClass = class extends TypeDef {
 
@@ -278,8 +275,7 @@ const BaseClass = class extends TypeDef {
         if (type in this.manifest.enums) return (new (createEnum(this.manifest.enums[type], type))(value)).bytes
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         if (!declaration) throw new Error(`No type declaration found for type ${type}`)
-        const { arm, identifier, parameters = { ...defaultParameters } } = declaration
-        const runSerialize = (v, cb) => {
+        const { parameters = { ...defaultParameters } } = declaration, runSerialize = (v, cb) => {
             if (((parameters.mode === 'variable') || parameters.length) && Array.isArray(v)) {
                 let totalLength = 0
                 const chunks = [[new int(v.length).bytes, totalLength]]
@@ -340,8 +336,7 @@ const BaseClass = class extends TypeDef {
         }
         declaration ??= this.manifest.structs[type] ?? this.manifest.unions[type] ?? this.manifest.typedefs[type]
         if (!declaration) throw new Error(`No type declaration found for type ${type}`)
-        const { arm, identifier, parameters = { ...defaultParameters } } = declaration
-        const runDeserialize = (b, bl, d, iai) => {
+        const { parameters = { ...defaultParameters } } = declaration, runDeserialize = (b, bl, d, iai) => {
             const r = this.deserialize(b, d, true, iai)
             return [bl + r.bytes.byteLength, r[r.constructor.valueProperty ?? 'value'], b.subarray(r.bytes.byteLength)]
         }
@@ -829,19 +824,13 @@ const XDR = {
             })
             for (const key in manifest.structs) {
                 const properties = []
-                for (const property of manifest.structs[key]) {
-                    properties.push({ ...property[1], identifier: property[0] })
-                }
+                for (const property of manifest.structs[key]) properties.push({ ...property[1], identifier: property[0] })
                 typeCollection.library.structs.push({ key, properties })
             }
-            for (const key in manifest.typedefs) {
-                typeCollection.library.typedefs.push({ key, declaration: manifest.typedefs[key] })
-            }
+            for (const key in manifest.typedefs) typeCollection.library.typedefs.push({ key, declaration: manifest.typedefs[key] })
             for (const key in manifest.unions) {
                 const discriminant = { ...manifest.unions[key].discriminant }, arms = []
-                for (const arm in manifest.unions[key].arms) {
-                    arms.push(manifest.unions[key].arms[arm])
-                }
+                for (const arm in manifest.unions[key].arms) arms.push(manifest.unions[key].arms[arm])
                 typeCollection.library.unions.push({ key, discriminant, arms })
             }
             for (const scope in typeCollection.library) manifest[scope] = Object.keys(manifest[scope])
