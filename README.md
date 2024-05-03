@@ -91,6 +91,17 @@ Creates, registers and returns a new type class from the given .X type definitio
 
 The `entry` parameter is the name of a struct/union/typedef or enum definition contained within the .X file, while a single file can define many types, only one can be returned as the result of a factory call, this parameter allows the caller to specify which type to return.
 
+For example: 
+
+```
+const TransactionEnvelope = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', 'TransactionEnvelope')
+
+const Transaction = await XDR.factory('https://raw.githubusercontent.com/stellar/stellar-xdr/curr/Stellar-transaction.x', 'Transaction')
+
+```
+
+In the example above, the referenced .X file contains many type definitions, the `entry` parameter allows the caller to specify which type to return from the same file. If the same .X file is called more than once within a short time during application load, it is only requested once and cached for reuse by the library. 
+
 The `options` object can contain the following properties, all of which are optional:
 
 * **baseURI**: An absolute URL which will be used as the base for resolving included URLs within the .X file.
@@ -170,10 +181,33 @@ Classes without a namespace specified will be placed within the `XDR.types._anon
 
 Can be used to defined default options for the `XDR.factory()` method. By default, it includes a default `includes` method. This can be overriden or other options as described above can have default value defined here as required.
 
+The `cacheExpiry` option can be used to customize how long in milliseconds the libary should cache responses from retrieved .X files. The default is 10000 milliseconds (10 seconds).
+
 
 ### ```XDR.version```
 
 Returns the current version of the SimpleXDR library.
+
+
+## Built-in Types
+
+The following types are built-in to the library:
+
+* `XDR.types._core.int`: an integer type, may be signed or unsigned. For example `const one = new XDR.types._core.int(1)` or `const one = new XDR.types._core.int(new Uint8Array([0,0,0,1]))`. 
+* `XDR.types._core.bool`: a boolean type: `const myFalse = new XDR.types._core.bool(false)`.
+* `XDR.types._core.float`: a floating point type.
+* `XDR.types._core.double`: a double precision floating point type.
+* `XDR.types._core.hyper`: a 64-bit signed integer type.
+* `XDR.types._core.opaque`: an opaque byte array type.
+* `XDR.types._core.string`: a variable length string type.
+* `XDR.types._core.void`: a void (null) type.
+* `XDR.types._core.typedef`: a base type definition type which may be used to define other types with similar structures to the core types. This is the same as `XDR.types._base.TypeDef`
+
+You may define a new complex type by extending the `XDR.types._base.BaseClass`, however it is recommended to create complex types using .X type definitions. 
+
+In all cases, an instance of a type, can be serialized as the property formatted bytes via the `bytes` property, and parsed back into a live JavaScript value via the `value` property. They can be created using either a live JavaScript value of the correct type, or via a valid UInt8Array of bytes.
+
+The core types generally behave as their values do as far as possible, for example `one + 1 = 2`. All types when converted to a string will render as a base64 encoded byte string, so \`${one}\` will render as `'AAAAAQ=='` rather then `'1'`.
 
 
 ## Recommended Type Definition and Development Process

@@ -50,7 +50,6 @@ class TypeDef {
 
 class int extends TypeDef {
 
-    static parameters = ['unsigned']
     static minBytesLength = 4
     static deserialize(bytes) { return this.getView(bytes)[this.unsigned ? 'getUint32' : 'getInt32'](0, false) }
     static isValueInput(input) { return Number.isInteger(input) }
@@ -60,8 +59,9 @@ class int extends TypeDef {
         return new Uint8Array(view.buffer)
     }
 
-    constructor(input, unsigned) {
+    constructor(input, parameters = {}) {
         super(input)
+        const { unsigned } = parameters
         this.unsigned = this.constructor.isValueInput(input) ? input >= 0 : !!unsigned
     }
 
@@ -434,11 +434,11 @@ const BaseClass = class extends TypeDef {
 Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
 
 const XDR = {
-    version: '1.1.9',
+    version: '1.2.0',
     types: { _anon: {}, _base: { TypeDef, BaseClass }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
     options: {
         includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
-        libraryKey: '__library__', cacheExpiry: 10000
+        cacheExpiry: 10000
     },
     deserialize: function (bytes, typeDef, parameters = {}, raw = false) {
         const { length, mode } = parameters
