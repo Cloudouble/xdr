@@ -571,9 +571,9 @@ const XDR = {
 Object.defineProperties(XDR, {
     createEnum: { value: createEnum },
     createTypeCollection: { value: async () => XDR.types._base.TypeCollection = ((await import('./lib/type-collection-factory.js')).default.bind(XDR))() },
-    _cache: { value: {} },
+    manifestToJson: { value: manifestToJson },
     parametersCollection: { value: parametersCollection },
-    manifestToJson: { value: manifestToJson }
+    _cache: { value: {} }
 })
 
 export default XDR
