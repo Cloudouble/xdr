@@ -486,7 +486,6 @@ const XDR = {
         return this.deserialize(bytes, typedef, parameters, raw)
     },
     stringify: function (value, typedef, parameters = {}) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, parameters))) },
-
     import: async function (typeCollection = {}, options = {}, namespace = undefined, format = undefined) {
         if (typeof typeCollection === 'string') {
             typeCollection = typeCollection.trim()
@@ -557,7 +556,6 @@ const XDR = {
             this.types[manifest.namespace ?? '_anon'][key] = typeClass
         }
     },
-
     factory: async function (xCode, entry, options = {}) {
         if (!this._factory) Object.defineProperty(this, '_factory', { value: (await import('./lib/factory.js')).default.bind(this) })
         return this._factory(xCode, entry, options)
@@ -566,7 +564,6 @@ const XDR = {
         if (!this._export) Object.defineProperty(this, '_export', { value: (await import('./lib/export.js')).default.bind(this) })
         return this._export(namespace, format, raw)
     }
-
 }
 Object.defineProperties(XDR, {
     createEnum: { value: createEnum },
