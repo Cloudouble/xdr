@@ -212,7 +212,7 @@ The core types generally behave as their values do as far as possible, for examp
 
 ## Recommended Type Definition and Development Process
 
-It is recommended to use a folder of `.X` type definition files as per the `XDR: External Data Representation Standard` at https://datatracker.ietf.org/doc/html/rfc4506.html. These files can be loaded into the `XDR.types` object using the `XDR.factory()` method during development. This allows for an easily readable and editable type definition format which is already fast enough to rapid iterative development.
+It is recommended to use a folder of `.X` type definition files as per the `XDR: External Data Representation Standard` at https://datatracker.ietf.org/doc/html/rfc4506.html. These files can be loaded into the `XDR.types` object using the `XDR.factory()` method during development. This allows for an easily readable and editable type definition format which is already fast enough to enable rapid iterative development.
 
 Once your type definitions are stable and complete, manually call the `XDR.export()` function to generate an XDR string which will contain the precompiled manifests of all types in the exported namespace. This string can then be saved to a file and loaded into the `XDR.types` object using the `XDR.import()` method for production usage.
 
