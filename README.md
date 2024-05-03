@@ -185,3 +185,5 @@ Once your type definitions are stable and complete, manually call the `XDR.expor
 You can also use the `XDR.export()` method to generate a JSON string - this is useful to manually introspect the manifests of the types in the exported namespace, but the XDR version will be more performant for actual usage.
 
 Depending on the structure and complexity of your `.X` files, sometimes the `factory` method as recommended for development usage is actually faster and lighter than the `import` method for production usage. If every ounce of performance really matters, take the time to try both ways and compare which works best for your application.
+
+Enjoy the world of XDR!
