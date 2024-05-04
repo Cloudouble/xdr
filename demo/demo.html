@@ -130,7 +130,7 @@
             'file-value': JSON.stringify(fileValue, null, 4),
             'file-bytes': JSON.stringify(Array.from(fileBytes), null, 4),
             'file-type': await fetch('file.x').then(r => r.text()),
-            'factory': `fileType = ${fileType.toString()}\n\n\n${XDR.types._core.typedef.toString()}`,
+            'factory': `fileType = ${fileType.toString()}\n\n\n${XDR.types._base.Scalar.toString()}`,
             'new-from-bytes': `fileInstanceFromBytes = ${JSON.stringify({
                 ...{ value: fileInstanceFromBytes.value, bytes: Array.from(fileInstanceFromBytes.bytes) }, constructor: { ...fileInstanceFromBytes.constructor }
             }, null, 4)}`,

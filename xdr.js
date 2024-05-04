@@ -1,4 +1,4 @@
-class TypeDef {
+class Scalar {
 
     #bytes
     #value
@@ -48,7 +48,7 @@ class TypeDef {
 
 }
 
-class int extends TypeDef {
+class int extends Scalar {
 
     static minBytesLength = 4
     static deserialize(bytes) { return this.getView(bytes)[this.unsigned ? 'getUint32' : 'getInt32'](0, false) }
@@ -82,7 +82,7 @@ class hyper extends int {
 
 }
 
-class float extends TypeDef {
+class float extends Scalar {
 
     static minBytesLength = 4
     static deserialize(bytes) { return this.getView(bytes).getFloat32(0, false) }
@@ -107,7 +107,7 @@ class double extends float {
 
 }
 
-class opaque extends TypeDef {
+class opaque extends Scalar {
 
     static parameters = ['length', 'mode']
     static isImplicitArray = true
@@ -155,7 +155,7 @@ class opaque extends TypeDef {
 
 }
 
-class string extends TypeDef {
+class string extends Scalar {
 
     #length
 
@@ -190,7 +190,7 @@ class string extends TypeDef {
 
 }
 
-class voidType extends TypeDef {
+class voidType extends Scalar {
 
     static deserialize() { return null }
     static isValueInput(input) { return input == null }
@@ -254,7 +254,7 @@ const createEnum = function (body, name, entry, namespace, manifest = {}) {
     parametersCollection = { defaultParameters, parameters, unsignedParameters, optionalParameters }
 Object.defineProperties(bool.prototype, { valueOf: { value: function () { return !!this.value } }, toJSON: { value: function () { return !!this.value } } })
 
-const BaseClass = class extends TypeDef {
+const Composite = class extends Scalar {
 
     static entry
     static name
@@ -431,11 +431,11 @@ const BaseClass = class extends TypeDef {
     }
 
 }
-Object.defineProperty(BaseClass.manifest, 'toJSON', { value: function () { return manifestToJson(BaseClass.manifest) } })
+Object.defineProperty(Composite.manifest, 'toJSON', { value: function () { return manifestToJson(Composite.manifest) } })
 
 const XDR = {
-    version: '1.2.0',
-    types: { _anon: {}, _base: { TypeDef, BaseClass }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType, typedef: TypeDef } },
+    version: '1.2.1',
+    types: { _anon: {}, _base: { Scalar, Composite }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType } },
     options: {
         includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
         cacheExpiry: 10000
@@ -443,7 +443,7 @@ const XDR = {
     deserialize: function (bytes, typeDef, parameters = {}, raw = false) {
         const { length, mode } = parameters
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
-        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
+        if (!(typeDef.prototype instanceof Scalar)) throw new Error(`Invalid typeDef: ${typeDef} `)
         if (!length || typeDef.isImplicitArray) {
             const r = new typeDef(bytes, (typeDef.isImplicitArray ? { length, mode } : {}))
             return raw ? r : r[r.constructor.valueProperty ?? 'value']
@@ -464,7 +464,7 @@ const XDR = {
     },
     serialize: function (value, typeDef, parameters = {}) {
         const { length, mode } = parameters
-        if (!(typeDef.prototype instanceof TypeDef)) throw new Error(`Invalid typeDef: ${typeDef} `)
+        if (!(typeDef.prototype instanceof Scalar)) throw new Error(`Invalid typeDef: ${typeDef} `)
         if (!length || typeDef.isImplicitArray) return (new typeDef(value, (typeDef.isImplicitArray ? { length, mode } : {}))).bytes
         if (!Array.isArray(value)) throw new Error('value must be an array')
         if (mode !== 'variable') mode = 'fixed'
@@ -545,11 +545,11 @@ const XDR = {
                 manifest[scope] = {}
                 for (const typeName of (manifestSummary[scope] ?? [])) if (library[scope][typeName]) manifest[scope][typeName] = library[scope][typeName]
             }
-            const typeClass = class extends BaseClass {
+            const typeClass = class extends Composite {
                 static entry = manifest.entry
                 static name = manifest.name
                 static namespace = manifest.namespace
-                static manifest = { ...BaseClass.manifest, ...manifest }
+                static manifest = { ...Composite.manifest, ...manifest }
             }
             Object.defineProperty(typeClass.manifest, 'toJSON', { value: function () { return manifestToJson(typeClass.manifest) } })
             this.types[manifest.namespace ?? '_anon'] ||= {}
