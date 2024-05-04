@@ -191,7 +191,7 @@ Returns the current version of the SimpleXDR library.
 
 ## Built-in Types
 
-The following types are built-in to the library:
+The following types are built-in to the library, all within the `XDR.types._core` object:
 
 * `XDR.types._core.int`: an integer type, may be signed or unsigned. For example `const one = new XDR.types._core.int(1)` or `const one = new XDR.types._core.int(new Uint8Array([0,0,0,1]))`. 
 * `XDR.types._core.bool`: a boolean type: `const myFalse = new XDR.types._core.bool(false)`.
@@ -201,13 +201,20 @@ The following types are built-in to the library:
 * `XDR.types._core.opaque`: an opaque byte array type.
 * `XDR.types._core.string`: a variable length string type.
 * `XDR.types._core.void`: a void (null) type.
-* `XDR.types._core.typedef`: a base type definition type which may be used to define other types with similar structures to the core types. This is the same as `XDR.types._base.TypeDef`
 
 You may define a new complex type by extending the `XDR.types._base.BaseClass`, however it is recommended to create complex types using .X type definitions. 
 
 In all cases, an instance of a type, can be serialized as the property formatted bytes via the `bytes` property, and parsed back into a live JavaScript value via the `value` property. They can be created using either a live JavaScript value of the correct type, or via a valid UInt8Array of bytes.
 
 The core types generally behave as their values do as far as possible, for example `one + 1 = 2`. All types when converted to a string will render as a base64 encoded byte string, so \`${one}\` will render as `'AAAAAQ=='` rather then `'1'`.
+
+
+## Base Classes
+
+The following classes are extended to create the core types, compiled types by the `XDR.factory()` method, and can also be used to define new types manually. They are found within the `XDR.types._base` object:
+
+* `XDR.types._base.Scalar`: a base type class which may be used to define other types with scalar data structures, similar to the core types. Keep in mind that types created by extending this manually will not be detected with the `XDR.factory()` method, you would also have to define your own parser or other custom usage.
+* `XDR.types._base.Composite`: the base type which is used to define types with composite data structures, including all compiled types produced by `XDR.factory()`. Manually extending this is more likely to be useful, however it is still recommended to use .X type definitions and `XDR.factory()` to create new types.
 
 
 ## Recommended Type Definition and Development Process
