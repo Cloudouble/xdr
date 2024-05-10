@@ -434,7 +434,7 @@ const Composite = class extends Scalar {
 Object.defineProperty(Composite.manifest, 'toJSON', { value: function () { return manifestToJson(Composite.manifest) } })
 
 const XDR = {
-    version: '1.2.1',
+    version: '1.2.2',
     types: { _anon: {}, _base: { Scalar, Composite }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType } },
     options: {
         includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
