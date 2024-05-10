@@ -122,7 +122,7 @@ The optional `format` parameter can be set to `'xdr'` or `'json'`, and will retu
 The optional `raw` boolean parameter can be set to `true` to return a live native JavaScript plain object instead of a JSON string (when `format` is `'json'`), or an instance of a `TypeCollection` class (when `format` is `'xdr'`). The default is `false`, which returns a string to be saved and used later with `import()`.
 
 
-### ```XDR.import(typeCollection = {}, options = {}, namespace = undefined, format = undefined)```
+### ```XDR.import(typeCollection, namespace, options = {}, format = undefined)```
 
 Takes any value previously returned from a `XDR.export()` call and loads the given types directly into the XDR object ready for use. This bypasses the need to fetch and parse .X file and thus allows for far more efficient production loading of types. Many types can be loaded in one call, and no .X parsing is done with this function. While the loaded value may sometimes be actually slightly larger than the total size of the .X files that would have been parsed, this will give better performance when a large number of .X files would otherwise need to be loaded - using `import` allows for many types to be loaded from only one request.
 

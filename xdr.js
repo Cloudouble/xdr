@@ -434,7 +434,7 @@ const Composite = class extends Scalar {
 Object.defineProperty(Composite.manifest, 'toJSON', { value: function () { return manifestToJson(Composite.manifest) } })
 
 const XDR = {
-    version: '1.2.2',
+    version: '1.2.3',
     types: { _anon: {}, _base: { Scalar, Composite }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType } },
     options: {
         includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
@@ -486,7 +486,7 @@ const XDR = {
         return this.deserialize(bytes, typedef, parameters, raw)
     },
     stringify: function (value, typedef, parameters = {}) { return btoa(String.fromCharCode.apply(null, this.serialize(value, typedef, parameters))) },
-    import: async function (typeCollection = {}, options = {}, namespace = undefined, format = undefined) {
+    import: async function (typeCollection, namespace, options = {}, format = undefined) {
         if (typeof typeCollection === 'string') {
             typeCollection = typeCollection.trim()
             if (typeCollection[0] === '/' || typeCollection[0] === '.' || typeCollection.endsWith('.xdr') || typeCollection.endsWith('.json') || typeCollection.includes('.') || typeCollection.includes(':')) {
