@@ -433,9 +433,37 @@ const Composite = class extends Scalar {
 }
 Object.defineProperty(Composite.manifest, 'toJSON', { value: function () { return manifestToJson(Composite.manifest) } })
 
+class TypeCollection extends Composite {
+    static entry = 'TypeCollection'
+    static name = 'TypeCollection'
+    static namespace = '_core'
+    static manifest = {
+        entry: 'TypeCollection', name: 'TypeCollection',
+        structs: {
+            TypeCollection: new Map([['library', { type: 'TypeLibrary' }], ['types', { type: 'TypeEntry', parameters }]]),
+            TypeLibrary: new Map([['enums', { type: 'EnumEntry', parameters }], ['structs', { type: 'StructEntry', parameters }], ['typedefs', { type: 'TypeDefEntry', parameters }], ['unions', { type: 'UnionEntry', parameters }]]),
+            EnumEntry: new Map([['key', { type: 'Name' }], ['body', { type: 'EnumPair', parameters }]]),
+            EnumPair: new Map([['value', { type: 'int', parameters: unsignedParameters }], ['identifier', { type: 'Name' }]]),
+            StructEntry: new Map([['key', { type: 'Name' }], ['properties', { type: 'PropertyParameters', parameters }]]),
+            PropertyParameters: new Map([['type', { type: 'Name' }], ['identifier', { type: 'Name' }], ['parameters', { type: 'Parameters', parameters: optionalParameters }]]),
+            Parameters: new Map([['length', { type: 'int', parameters: unsignedParameters }], ['mode', { type: 'LengthMode' }], ['optional', { type: 'bool' }], ['unsigned', { type: 'bool' }]]),
+            TypeDefEntry: new Map([['key', { type: 'Name' }], ['declaration', { type: 'TypeParameters' }]]),
+            TypeParameters: new Map([['type', { type: 'Name', }], ['parameters', { type: 'Parameters', parameters: optionalParameters }]]),
+            UnionEntry: new Map([['key', { type: 'Name' }], ['discriminant', { type: 'Discriminant' }], ['arms', { type: 'ArmParameters', parameters }]]),
+            Discriminant: new Map([['type', { type: 'Name' }], ['identifier', { type: 'Name' }]]),
+            ArmParameters: new Map([['type', { type: 'Name' }], ['arm', { type: 'Name' }], ['identifier', { type: 'Name', parameters: optionalParameters }], ['parameters', { type: 'Parameters', parameters: optionalParameters }]]),
+            TypeEntry: new Map([['key', { type: 'Name' }], ['manifest', { type: 'TypeManifest' }]]),
+            TypeManifest: new Map([['entry', { type: 'Name' }], ['enums', { type: 'Name', parameters }], ['name', { type: 'Name' }], ['structs', { type: 'Name', parameters }], ['typedefs', { type: 'Name', parameters }], ['unions', { type: 'Name', parameters }]])
+        },
+        unions: {},
+        typedefs: { Name: { type: 'string', parameters } },
+        enums: { LengthMode: ['fixed', 'variable'] }
+    }
+}
+
 const XDR = {
-    version: '1.2.3',
-    types: { _anon: {}, _base: { Scalar, Composite }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType } },
+    version: '1.2.4',
+    types: { _anon: {}, _base: { Scalar, Composite, TypeCollection }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType } },
     options: {
         includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
         cacheExpiry: 10000
@@ -496,10 +524,8 @@ const XDR = {
             }
             if (!format) format = typeCollection[0] === '{' ? 'json' : 'xdr'
             format = format === 'json' ? 'json' : 'xdr'
-            if (!this.types._base.TypeCollection) await this.createTypeCollection()
             typeCollection = format === 'json' ? JSON.parse(typeCollection) : this.parse(typeCollection, this.types._base.TypeCollection)
         } else {
-            if (!this.types._base.TypeCollection) await this.createTypeCollection()
             if ((typeCollection instanceof this.types._base.TypeCollection)) typeCollection = typeCollection.value
         }
         if (!typeCollection || (typeof typeCollection !== 'object')) throw new Error('typeCollection must be an object')
@@ -567,7 +593,6 @@ const XDR = {
 }
 Object.defineProperties(XDR, {
     createEnum: { value: createEnum },
-    createTypeCollection: { value: async () => XDR.types._base.TypeCollection = ((await import('./lib/type-collection-factory.js')).default.bind(XDR))() },
     manifestToJson: { value: manifestToJson },
     parametersCollection: { value: parametersCollection },
     _cache: { value: {} }
