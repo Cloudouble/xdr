@@ -462,14 +462,14 @@ class TypeCollection extends Composite {
 }
 
 const XDR = {
-    version: '1.2.4',
+    version: '1.2.5',
     types: { _anon: {}, _base: { Scalar, Composite, TypeCollection }, _core: { bool, int, hyper, float, double, opaque, string, void: voidType } },
     options: {
         includes: (match, baseUri) => new URL(match.split('/').pop().split('.').slice(0, -1).concat('x').join('.'), (baseUri ?? document.baseURI)).href,
         cacheExpiry: 10000
     },
     deserialize: function (bytes, typeDef, parameters = {}, raw = false) {
-        const { length, mode } = parameters
+        let { length, mode } = parameters
         if (!(bytes instanceof Uint8Array)) throw new Error('bytes must be a Uint8Array')
         if (!(typeDef.prototype instanceof Scalar)) throw new Error(`Invalid typeDef: ${typeDef} `)
         if (!length || typeDef.isImplicitArray) {
@@ -491,7 +491,7 @@ const XDR = {
         return result
     },
     serialize: function (value, typeDef, parameters = {}) {
-        const { length, mode } = parameters
+        let { length, mode } = parameters
         if (!(typeDef.prototype instanceof Scalar)) throw new Error(`Invalid typeDef: ${typeDef} `)
         if (!length || typeDef.isImplicitArray) return (new typeDef(value, (typeDef.isImplicitArray ? { length, mode } : {}))).bytes
         if (!Array.isArray(value)) throw new Error('value must be an array')
